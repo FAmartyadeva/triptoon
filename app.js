@@ -2,7 +2,7 @@ const WIDTH = 1080;
 const HEIGHT = 1920;
 
 // Keep the geographic map itself close to a 2:1 world-map ratio inside the 9:16 video.
-const MAP = { x: 0, y: 0, width: 1080, height: 540 };
+const MAP = { x: 0, y: 0, width: 1080, height: 1080 };
 const SCREEN = { width: WIDTH, height: HEIGHT };
 const CAMERA_CENTER_Y = 980;
 
@@ -62,9 +62,16 @@ const graticuleEl = document.getElementById('graticule');
 
 function cityByName(name){ return cities.find(c => c.name === name); }
 function project(lon,lat){
+  // Web Mercator projection: closer to the geometry users are familiar with
+  // from modern map applications. Clamp near the poles to avoid infinity.
+  const maxLat=85.05112878;
+  const clampedLat=Math.max(-maxLat,Math.min(maxLat,lat));
+  const xNorm=(lon+180)/360;
+  const latRad=clampedLat*Math.PI/180;
+  const yNorm=(1-Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2;
   return {
-    x: MAP.x + ((lon + 180) / 360) * MAP.width,
-    y: MAP.y + ((90 - lat) / 180) * MAP.height
+    x: MAP.x + xNorm*MAP.width,
+    y: MAP.y + yNorm*MAP.height
   };
 }
 function curvePath(a,b,mode){
@@ -174,7 +181,7 @@ function renderWorld(){
           const p=project(lon,lat);
           return `${p.x+offset},${p.y}`;
         }).join(' ');
-        parts.push(`<polygon points="${pts}" fill="${fill}" stroke="#71966e" stroke-width="0.8" vector-effect="non-scaling-stroke"/>`);
+        parts.push(`<polygon points="${pts}" fill="${fill}" stroke="#6f956d" stroke-width="0.65" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
       });
     });
   }
@@ -273,7 +280,7 @@ function renderControls(){
 
 const VEHICLE_ASSETS = {
   plane: {src:'./plane.png', width:36, height:36, rotationOffset:90},
-  car: {src:'./mobil.png', width:33, height:33, rotationOffset:90},
+  car: {src:'./mobil.png', width:27, height:27, rotationOffset:90},
   train: {src:'./kereta.png', width:33, height:33, rotationOffset:90},
   ship: {src:'./kapal.png', width:35, height:35, rotationOffset:90}
 };
