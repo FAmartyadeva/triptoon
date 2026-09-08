@@ -178,22 +178,53 @@ function cameraState(segments){
   if(!segments.length){
     return {x:MAP.width/2,y:MAP.height/2,scale:9.45};
   }
+
   const active=activeSegmentAt(segments,progress);
   const {seg,t}=active;
   const pt=qPoint(seg.p1,seg.c,seg.p2,t);
 
-  // Camera zoom is based on leg length: local trips are closer, long-haul
-  // flights pull back slightly, but the map always occupies most of 9:16.
-  const d=Math.max(1,seg.distanceKm);
-  const scale=clamp((6.25-Math.log10(d)*0.95)*3,9.0,14.7);
+  // Base zoom by transport mode.
+  // Plane/ship keep the current wider framing.
+  // Car/train zoom in about 3x closer.
+  const modeMultiplier = (seg.mode==='car' || seg.mode==='train') ? 3 : 1;
 
-  // Follow the vehicle but look a little ahead along the current leg so the
-  // destination remains visible and movement feels intentional.
+  const d=Math.max(1,seg.distanceKm);
+  const baseScale=clamp((6.25-Math.log10(d)*0.95)*3,9.0,14.7);
+  const targetScale=baseScale*modeMultiplier;
+
+  // Look slightly ahead so the destination stays visible.
   const aheadT=clamp(t+0.14,0,1);
   const ahead=qPoint(seg.p1,seg.c,seg.p2,aheadT);
-  const x=pt.x*0.72+ahead.x*0.28;
-  const y=pt.y*0.72+ahead.y*0.28;
-  return {x,y,scale};
+  const targetX=pt.x*0.72+ahead.x*0.28;
+  const targetY=pt.y*0.72+ahead.y*0.28;
+
+  // Smooth camera transition between legs.
+  // Blend in/out around the start and end of each segment.
+  const smoothstep=x=>x*x*(3-2*x);
+  const edge=0.12;
+  let blend=1;
+
+  if(t<edge){
+    blend=smoothstep(t/edge);
+  }else if(t>1-edge){
+    blend=smoothstep((1-t)/edge);
+  }
+
+  // Keep a little damping so the camera does not "snap" when the active leg changes.
+  if(!cameraState.prev){
+    cameraState.prev={x:targetX,y:targetY,scale:targetScale};
+  }
+
+  const follow=0.10 + 0.18*blend;
+  cameraState.prev.x += (targetX-cameraState.prev.x)*follow;
+  cameraState.prev.y += (targetY-cameraState.prev.y)*follow;
+  cameraState.prev.scale += (targetScale-cameraState.prev.scale)*follow;
+
+  return {
+    x:cameraState.prev.x,
+    y:cameraState.prev.y,
+    scale:cameraState.prev.scale
+  };
 }
 
 function applyCamera(segments){
@@ -269,11 +300,12 @@ function renderMap(){
   if(!segments.length){ vehicleEl.innerHTML=''; return; }
   const active=activeSegmentAt(segments,progress);
   const seg=active.seg, t=active.t;
+  const motionT=t*t*(3-2*t);
   if(legTitle) legTitle.textContent=`${seg.from.name} → ${seg.to.name}`;
   if(legDistance) legDistance.textContent=`~ ${Math.round(seg.distanceKm).toLocaleString()} km`;
   if(legMode) legMode.textContent=({plane:'✈',car:'🚗',train:'🚆',ship:'🚢'})[seg.mode] || '✈';
 
-  const pt=qPoint(seg.p1,seg.c,seg.p2,t), tan=qTangent(seg.p1,seg.c,seg.p2,t);
+  const pt=qPoint(seg.p1,seg.c,seg.p2,motionT), tan=qTangent(seg.p1,seg.c,seg.p2,motionT);
   const angle=Math.atan2(tan.y,tan.x)*180/Math.PI;
   let sprite=document.getElementById('vehicleSprite');
   if(!sprite || sprite.dataset.mode!==seg.mode){
@@ -287,6 +319,7 @@ function renderMap(){
 }
 
 function animate(){
+  cameraState.prev=null;
   animationToken += 1;
   const token=animationToken;
   if(raf) cancelAnimationFrame(raf);
@@ -306,6 +339,7 @@ function animate(){
 }
 
 function reset(){
+  cameraState.prev=null;
   animationToken += 1;
   if(raf) cancelAnimationFrame(raf);
   raf=null; progress=0; playing=false; renderMap();

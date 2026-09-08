@@ -1,16 +1,15 @@
-TripToon - Zoomed Map / Smaller Visual Elements
+TripToon - Mode-Aware Zoom + Smooth Transitions
 
 Changes:
-1. Camera zoom is approximately 3x closer than the previous version.
-2. City labels and city markers are smaller.
-3. Vehicle PNG sprites are smaller.
-4. Journey route lines are thinner.
-5. Distance-weighted timing and existing vehicle PNG names are unchanged.
+1. Plane and ship keep the current map zoom.
+2. Car and train automatically zoom about 3x closer.
+3. Camera transitions between legs are damped/smoothed to avoid snapping.
+4. Vehicle motion uses smoothstep easing, making departure/arrival feel softer.
+5. Existing distance-weighted trip timing remains unchanged.
+6. Existing PNG filenames remain:
+   - plane.png
+   - mobil.png
+   - kereta.png
+   - kapal.png
 
-Vehicle filenames expected in repository root:
-- plane.png
-- mobil.png
-- kereta.png
-- kapal.png
-
-Replace only your existing app.js with this app.js.
+Replace your existing app.js with the app.js in this ZIP.
