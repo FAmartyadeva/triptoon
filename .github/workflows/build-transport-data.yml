@@ -1,0 +1,33 @@
+name: Build OSM transport data
+on: {workflow_dispatch: {}}
+permissions: {contents: write}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y osmium-tool
+      - name: Download and filter OpenStreetMap
+        run: |
+          mkdir -p data/pbf data/osm-filtered
+          urls=(
+            "https://download.geofabrik.de/asia/indonesia/java-latest.osm.pbf"
+            "https://download.geofabrik.de/asia/malaysia-singapore-brunei-latest.osm.pbf"
+            "https://download.geofabrik.de/asia/japan-latest.osm.pbf"
+            "https://download.geofabrik.de/europe/great-britain-latest.osm.pbf"
+          )
+          for u in "${urls[@]}"; do
+            f="data/pbf/$(basename "$u")"; curl -L --fail --retry 3 "$u" -o "$f"
+            base="$(basename "$f" .osm.pbf)"
+            osmium tags-filter "$f" w/highway=motorway,motorway_link,trunk,trunk_link w/railway=rail \
+              -o "data/osm-filtered/${base}.osm" -f osm
+          done
+      - run: python3 tools/build_transport_data.py
+      - name: Commit graph
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add transport-data.js
+          git diff --cached --quiet || git commit -m "Build OSM road and rail graph"
+          git push
