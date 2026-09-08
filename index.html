@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f3eadb" />
+  <title>TripToon</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="panel">
+      <div class="brand">
+        <div class="brand-mark">TT</div>
+        <div>
+          <h1>TripToon</h1>
+          <p>Animated journeys. Zero paid APIs.</p>
+        </div>
+      </div>
+
+      <div class="section-title">Journey</div>
+      <div id="stops" class="stops"></div>
+      <button id="addStop" class="add-btn">＋ Add destination</button>
+
+      <div class="section-title top-gap">Animation</div>
+      <label class="range-label"><span>Duration</span><strong id="durationLabel">18s</strong></label>
+      <input id="duration" class="range" type="range" min="6" max="45" value="18" />
+
+      <div class="actions">
+        <button id="playBtn" class="primary">▶ Play</button>
+        <button id="resetBtn" class="secondary">↻ Reset</button>
+      </div>
+      <button id="exportBtn" class="export-btn">⇩ Export WebM</button>
+      <p class="hint">Everything runs in the browser. No Google Maps, Mapbox, routing API, or API key.</p>
+    </aside>
+
+    <main class="stage-wrap">
+      <div class="phone-frame">
+        <svg id="mapSvg" class="map-svg" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+          <rect width="1080" height="1920" fill="#f3eadb" />
+          <g id="continents" fill="#d9c6a5" stroke="#b9a17c" stroke-width="3" opacity="0.95">
+            <path d="M90 410 C110 300 210 215 340 210 C430 208 484 260 470 342 C455 430 370 478 288 520 C214 558 146 540 98 476 Z"/>
+            <path d="M300 570 C365 530 415 555 441 625 C468 700 434 790 410 875 C389 950 335 1018 279 982 C241 956 259 874 238 815 C215 750 223 627 300 570 Z"/>
+            <path d="M498 324 C600 244 780 230 911 288 C981 320 1019 382 982 433 C927 509 825 477 757 535 C705 580 710 666 635 670 C565 674 534 603 498 544 C460 481 432 377 498 324 Z"/>
+            <path d="M630 677 C704 650 775 680 804 738 C829 790 786 824 747 856 C702 894 688 965 632 946 C583 929 580 842 594 781 C604 738 599 691 630 677 Z"/>
+            <path d="M814 959 C879 935 950 963 976 1027 C1001 1089 967 1169 912 1199 C852 1232 788 1194 770 1135 C751 1076 764 980 814 959 Z"/>
+          </g>
+          <text x="540" y="120" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="58" fill="#3a2c22">MY JOURNEY</text>
+          <text id="subtitle" x="540" y="176" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#6d5b4c">TRIPTOON • 3 STOPS</text>
+          <g id="routes"></g>
+          <g id="markers"></g>
+          <g id="vehicle"></g>
+          <text x="540" y="1800" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" fill="#6d5b4c">Made with TripToon • 100% local animation</text>
+        </svg>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
