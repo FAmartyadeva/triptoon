@@ -35,6 +35,7 @@ let stops = [
 let progress = 0;
 let playing = false;
 let raf = null;
+let animationToken = 0;
 
 const stopsEl = document.getElementById('stops');
 const routesEl = document.getElementById('routes');
@@ -74,10 +75,20 @@ function renderControls(){
   });
 }
 
+function vehicleMarkup(mode){
+  const icons = {
+    plane: '<path d="M-34 2 L-8 -5 L7 -34 L17 -34 L12 -4 L35 3 L35 10 L11 7 L16 30 L7 30 L-7 8 L-34 9 Z" fill="#3e332b"/>',
+    car: '<rect x="-29" y="-10" width="58" height="24" rx="8" fill="#3e332b"/><path d="M-18 -10 L-8 -24 H13 L25 -10 Z" fill="#3e332b"/><circle cx="-18" cy="17" r="8" fill="#3e332b"/><circle cx="19" cy="17" r="8" fill="#3e332b"/>',
+    train: '<rect x="-28" y="-27" width="56" height="50" rx="10" fill="#3e332b"/><rect x="-19" y="-17" width="14" height="13" rx="2" fill="#fffaf1"/><rect x="5" y="-17" width="14" height="13" rx="2" fill="#fffaf1"/><circle cx="-17" cy="28" r="7" fill="#3e332b"/><circle cx="17" cy="28" r="7" fill="#3e332b"/>',
+    ship: '<path d="M-34 8 H34 L23 27 H-22 Z" fill="#3e332b"/><rect x="-10" y="-22" width="26" height="30" rx="3" fill="#3e332b"/><rect x="-3" y="-15" width="12" height="8" fill="#fffaf1"/>'
+  };
+  return `<circle r="47" fill="#fffaf1" stroke="#3e332b" stroke-width="5"/>${icons[mode] || icons.plane}`;
+}
+
 function renderMap(){
   const resolved=getResolved(), segments=getSegments();
   subtitleEl.textContent=`TRIPTOON • ${resolved.length} STOPS`;
-  routesEl.innerHTML=''; markersEl.innerHTML=''; vehicleEl.innerHTML='';
+  routesEl.innerHTML=''; markersEl.innerHTML='';
   segments.forEach((seg,i)=>{
     const amount=Math.max(0,Math.min(1,progress*segments.length-i));
     routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#8d745a" stroke-width="10" stroke-linecap="round" stroke-dasharray="18 18" opacity=".35"/><path d="${seg.d}" fill="none" stroke="#3e332b" stroke-width="8" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
@@ -86,24 +97,58 @@ function renderMap(){
     const p=project(s.data.lon,s.data.lat);
     markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x} ${p.y})"><circle r="16" fill="#3e332b"/><circle r="7" fill="#f3eadb"/><rect x="-74" y="24" width="148" height="48" rx="24" fill="#fffaf1" stroke="#c8b59a"/><text x="0" y="56" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#3a2c22">${esc(s.data.name)}</text></g>`);
   });
-  if(segments.length){
-    const scaled=Math.min(progress,0.999999)*segments.length;
-    const idx=Math.min(segments.length-1,Math.floor(scaled));
-    const t=scaled-idx, seg=segments[idx];
-    const pt=qPoint(seg.p1,seg.c,seg.p2,t), tan=qTangent(seg.p1,seg.c,seg.p2,t);
-    const angle=Math.atan2(tan.y,tan.x)*180/Math.PI;
-    const flip=angle>90||angle<-90?'rotate(180)':'';
-    vehicleEl.innerHTML=`<g transform="translate(${pt.x} ${pt.y}) rotate(${angle})"><circle r="43" fill="#fffaf1" stroke="#3e332b" stroke-width="4"/><text x="0" y="15" text-anchor="middle" font-size="44" transform="${flip}">${modes[seg.mode].emoji}</text></g>`;
+
+  if(!segments.length){
+    vehicleEl.innerHTML='';
+    return;
   }
+
+  const scaled=Math.min(progress,0.999999)*segments.length;
+  const idx=Math.min(segments.length-1,Math.floor(scaled));
+  const t=scaled-idx, seg=segments[idx];
+  const pt=qPoint(seg.p1,seg.c,seg.p2,t), tan=qTangent(seg.p1,seg.c,seg.p2,t);
+  const angle=Math.atan2(tan.y,tan.x)*180/Math.PI;
+
+  let sprite=document.getElementById('vehicleSprite');
+  const desiredMode=seg.mode;
+  if(!sprite || sprite.dataset.mode!==desiredMode){
+    vehicleEl.innerHTML=`<g id="vehicleSprite" data-mode="${desiredMode}">${vehicleMarkup(desiredMode)}</g>`;
+    sprite=document.getElementById('vehicleSprite');
+  }
+  sprite.setAttribute('transform',`translate(${pt.x} ${pt.y}) rotate(${angle})`);
 }
 
 function animate(){
-  cancelAnimationFrame(raf); playing=true; progress=0;
-  const start=performance.now(), total=Number(durationEl.value)*1000;
-  const tick=now=>{progress=Math.min(1,(now-start)/total);renderMap();if(progress<1)raf=requestAnimationFrame(tick);else playing=false;};
+  animationToken += 1;
+  const token=animationToken;
+  if(raf) cancelAnimationFrame(raf);
+  playing=true;
+  progress=0;
+  renderMap();
+
+  const start=performance.now();
+  const total=Math.max(1000,Number(durationEl.value)*1000);
+  const tick=now=>{
+    if(token!==animationToken) return;
+    progress=Math.min(1,(now-start)/total);
+    renderMap();
+    if(progress<1){
+      raf=requestAnimationFrame(tick);
+    }else{
+      playing=false;
+      raf=null;
+    }
+  };
   raf=requestAnimationFrame(tick);
 }
-function reset(){cancelAnimationFrame(raf);progress=0;playing=false;renderMap();}
+function reset(){
+  animationToken += 1;
+  if(raf) cancelAnimationFrame(raf);
+  raf=null;
+  progress=0;
+  playing=false;
+  renderMap();
+}
 
 async function exportWebM(){
   if(!window.MediaRecorder){alert('Your browser does not support MediaRecorder. Try Chrome or Edge.');return;}
