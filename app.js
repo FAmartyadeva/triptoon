@@ -174,6 +174,12 @@ function renderWorld(){
 
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 
+function visualScaleForMode(mode){
+  // Car/train camera is ~3x closer, so shrink map-bound UI by 3x
+  // to preserve roughly the same apparent on-screen size.
+  return (mode==='car' || mode==='train') ? (1/3) : 1;
+}
+
 function cameraState(segments){
   if(!segments.length){
     return {x:MAP.width/2,y:MAP.height/2,scale:9.45};
@@ -277,15 +283,25 @@ function renderMap(){
 
   segments.forEach(seg=>{
     const amount=segmentProgress(seg,progress);
-    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity=".82"/><path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="12 10" opacity=".38"/><path d="${seg.d}" fill="none" stroke="#17384a" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
+    const vs=visualScaleForMode(seg.mode);
+    const outerW=(2.5*vs).toFixed(3);
+    const midW=(1.25*vs).toFixed(3);
+    const innerW=(1.5*vs).toFixed(3);
+    const dashA=(12*vs).toFixed(3);
+    const dashB=(10*vs).toFixed(3);
+    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="${outerW}" stroke-linecap="round" opacity=".82"/><path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="${midW}" stroke-linecap="round" stroke-dasharray="${dashA} ${dashB}" opacity=".38"/><path d="${seg.d}" fill="none" stroke="#17384a" stroke-width="${innerW}" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
   });
 
   // Repeat labels/markers horizontally too, so labels remain attached to land
   // when the camera crosses the date line.
+  const activeForVisuals=segments.length?activeSegmentAt(segments,progress):null;
+  const activeModeForVisuals=activeForVisuals?activeForVisuals.seg.mode:'plane';
+  const labelScale=visualScaleForMode(activeModeForVisuals);
+
   for(const s of resolved){
     const p=project(s.data.lon,s.data.lat);
     for(const offset of [-MAP.width,0,MAP.width]){
-      markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x+offset} ${p.y})"><circle r="2.4" fill="#17384a"/><circle r="0.9" fill="#ffffff"/><rect x="-15" y="4" width="30" height="9" rx="4.5" fill="#ffffff" fill-opacity=".94" stroke="#bdd2d8" stroke-width="0.35"/><text x="0" y="10.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="4.4" font-weight="700" fill="#17384a">${esc(s.data.name)}</text></g>`);
+      markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x+offset} ${p.y}) scale(${labelScale})"><circle r="2.4" fill="#17384a"/><circle r="0.9" fill="#ffffff"/><rect x="-15" y="4" width="30" height="9" rx="4.5" fill="#ffffff" fill-opacity=".94" stroke="#bdd2d8" stroke-width="0.35"/><text x="0" y="10.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="4.4" font-weight="700" fill="#17384a">${esc(s.data.name)}</text></g>`);
     }
   }
 
@@ -315,7 +331,8 @@ function renderMap(){
   // Do NOT wrap the vehicle back into the base tile. The camera and repeated
   // map tiles follow its continuous x coordinate naturally.
   const rotationOffset=(VEHICLE_ASSETS[seg.mode] || VEHICLE_ASSETS.plane).rotationOffset || 0;
-  sprite.setAttribute('transform',`translate(${pt.x} ${pt.y}) rotate(${angle + rotationOffset})`);
+  const vehicleVisualScale=visualScaleForMode(seg.mode);
+  sprite.setAttribute('transform',`translate(${pt.x} ${pt.y}) rotate(${angle + rotationOffset}) scale(${vehicleVisualScale})`);
 }
 
 function animate(){

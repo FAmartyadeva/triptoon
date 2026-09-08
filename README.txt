@@ -1,15 +1,11 @@
-TripToon - Mode-Aware Zoom + Smooth Transitions
+TripToon - Proportional Visuals for Car/Train Zoom
 
 Changes:
-1. Plane and ship keep the current map zoom.
-2. Car and train automatically zoom about 3x closer.
-3. Camera transitions between legs are damped/smoothed to avoid snapping.
-4. Vehicle motion uses smoothstep easing, making departure/arrival feel softer.
-5. Existing distance-weighted trip timing remains unchanged.
-6. Existing PNG filenames remain:
-   - plane.png
-   - mobil.png
-   - kereta.png
-   - kapal.png
+1. Car/train still use ~3x closer camera zoom.
+2. City labels/markers shrink by 3x during car/train legs.
+3. Vehicle PNG sprites shrink by 3x during car/train legs.
+4. Route line thickness and dash spacing shrink by 3x during car/train legs.
+5. Plane/ship appearance remains unchanged.
+6. Smooth camera transitions and distance-weighted timing remain unchanged.
 
-Replace your existing app.js with the app.js in this ZIP.
+Replace only your existing app.js with the app.js in this ZIP.
