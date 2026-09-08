@@ -110,7 +110,51 @@ function curvePath(a,b,mode){
 function qPoint(p1,c,p2,t){const mt=1-t;return{x:mt*mt*p1.x+2*mt*t*c.x+t*t*p2.x,y:mt*mt*p1.y+2*mt*t*c.y+t*t*p2.y};}
 function qTangent(p1,c,p2,t){return{x:2*(1-t)*(c.x-p1.x)+2*t*(p2.x-c.x),y:2*(1-t)*(c.y-p1.y)+2*t*(p2.y-c.y)};}
 function getResolved(){return stops.map(s=>({...s,data:cityByName(s.city)})).filter(s=>s.data);}
-function getSegments(){const r=getResolved();return r.slice(0,-1).map((s,i)=>({from:s.data,to:r[i+1].data,mode:s.mode,...curvePath(s.data,r[i+1].data,s.mode)}));}
+
+function haversineKm(a,b){
+  const R=6371;
+  const toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
+  const lat1=toRad(a.lat), lat2=toRad(b.lat);
+  const h=Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+
+function getSegments(){
+  const r=getResolved();
+  const segments=r.slice(0,-1).map((s,i)=>{
+    const to=r[i+1].data;
+    return {
+      from:s.data,
+      to,
+      mode:s.mode,
+      distanceKm:haversineKm(s.data,to),
+      ...curvePath(s.data,to,s.mode)
+    };
+  });
+  const totalDistance=segments.reduce((sum,seg)=>sum+seg.distanceKm,0) || 1;
+  let cumulative=0;
+  return segments.map(seg=>{
+    const startShare=cumulative/totalDistance;
+    cumulative+=seg.distanceKm;
+    const endShare=cumulative/totalDistance;
+    return {...seg,startShare,endShare,share:endShare-startShare};
+  });
+}
+
+function segmentProgress(seg,overallProgress){
+  if(overallProgress<=seg.startShare) return 0;
+  if(overallProgress>=seg.endShare) return 1;
+  return (overallProgress-seg.startShare)/Math.max(seg.share,1e-9);
+}
+
+function activeSegmentAt(segments,overallProgress){
+  if(!segments.length) return null;
+  const p=Math.max(0,Math.min(0.999999999,overallProgress));
+  const idx=Math.max(0,segments.findIndex(seg=>p<seg.endShare));
+  const seg=segments[idx<0?segments.length-1:idx];
+  return {seg,idx:idx<0?segments.length-1:idx,t:segmentProgress(seg,p)};
+}
 function esc(s){return String(s).replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function getDurationSeconds(){
   const raw=Number(durationEl.value);
@@ -162,8 +206,8 @@ function renderMap(){
   const resolved=getResolved(), segments=getSegments();
   subtitleEl.textContent=`TRIPTOON • ${resolved.length} STOPS`;
   routesEl.innerHTML=''; markersEl.innerHTML='';
-  segments.forEach((seg,i)=>{
-    const amount=Math.max(0,Math.min(1,progress*segments.length-i));
+  segments.forEach(seg=>{
+    const amount=segmentProgress(seg,progress);
     routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" opacity=".75"/><path d="${seg.d}" fill="none" stroke="#586b75" stroke-width="7" stroke-linecap="round" stroke-dasharray="16 14" opacity=".42"/><path d="${seg.d}" fill="none" stroke="#203742" stroke-width="8" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
   });
   resolved.forEach(s=>{
@@ -172,9 +216,8 @@ function renderMap(){
   });
 
   if(!segments.length){ vehicleEl.innerHTML=''; return; }
-  const scaled=Math.min(progress,0.999999)*segments.length;
-  const idx=Math.min(segments.length-1,Math.floor(scaled));
-  const t=scaled-idx, seg=segments[idx];
+  const active=activeSegmentAt(segments,progress);
+  const seg=active.seg, t=active.t;
   const pt=qPoint(seg.p1,seg.c,seg.p2,t), tan=qTangent(seg.p1,seg.c,seg.p2,t);
   const angle=Math.atan2(tan.y,tan.x)*180/Math.PI;
   let sprite=document.getElementById('vehicleSprite');
