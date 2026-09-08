@@ -1,15 +1,16 @@
-TripToon - Logical Maritime Routing
+TripToon - Maritime Routing V2 + Seamless Country Borders
 
-Major change:
-- Ship routes no longer use airplane-like direct curves.
-- Ship mode now uses a local maritime waypoint graph.
-- The graph includes major global sea corridors/chokepoints such as:
-  Malacca Strait, Indian Ocean, Gulf of Aden, Bab-el-Mandeb,
-  Red Sea, Suez Canal, Mediterranean, Gibraltar, Cape of Good Hope,
-  Panama and North Pacific/Bering alternatives.
-- Dijkstra shortest-path routing selects a logical maritime corridor.
-- Plane keeps the aerial curve.
-- Car/train architecture remains separate and can next be upgraded to dedicated road/rail graphs.
+Fixes:
+1. Cape Town -> Los Angeles can now route logically through:
+   South Atlantic -> Caribbean -> Panama Canal -> Eastern Pacific -> California.
+2. Ship routes start/end from offshore approach points, not city-centre coordinates on land.
+3. Maritime graph was expanded substantially across Atlantic, Indian and Pacific oceans.
+4. Ship routes use multiple sea waypoints and may bend many times instead of drawing a straight line.
+5. Country rendering now uses a land underlay + separate fills + separate border strokes.
+   This removes the visible blue gaps between neighbouring countries caused by SVG anti-aliasing.
 
-No paid API or runtime map request is introduced.
-Replace app.js from this ZIP.
+Runtime API cost remains zero.
+
+Replace:
+- app.js
+- world-data.js (included for consistency)

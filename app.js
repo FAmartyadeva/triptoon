@@ -81,80 +81,190 @@ function project(lon,lat){
 // Ship = maritime waypoint graph through logical sea corridors/chokepoints.
 // Car/train = terrestrial corridor graph fallback (coarse, not street/rail level).
 
+const PORT_APPROACHES = {
+  'Tokyo':            {lon:140.2, lat:35.0},
+  'Singapore':        {lon:103.75,lat:1.15},
+  'Hong Kong':        {lon:114.35,lat:22.15},
+  'Shanghai':         {lon:122.0, lat:31.0},
+  'Manila':           {lon:120.7, lat:14.3},
+  'Ho Chi Minh City': {lon:107.0, lat:10.2},
+  'Sydney':           {lon:151.5, lat:-34.0},
+  'Melbourne':        {lon:145.2, lat:-38.2},
+  'Perth':            {lon:115.5, lat:-32.2},
+  'Dubai':            {lon:55.0,  lat:25.0},
+  'Doha':             {lon:51.3,  lat:25.2},
+  'Mumbai':           {lon:72.5,  lat:18.8},
+  'Istanbul':         {lon:29.1,  lat:40.8},
+  'Athens':           {lon:23.5,  lat:37.7},
+  'Rome':             {lon:12.0,  lat:41.6},
+  'London':           {lon:1.6,   lat:51.0},
+  'Cape Town':        {lon:18.0,  lat:-34.5},
+  'Rio de Janeiro':   {lon:-43.0, lat:-23.2},
+  'São Paulo':        {lon:-46.0, lat:-24.2},
+  'Buenos Aires':     {lon:-57.5, lat:-35.0},
+  'Miami':            {lon:-79.8, lat:25.4},
+  'New York':         {lon:-73.4, lat:40.3},
+  'Los Angeles':      {lon:-118.8,lat:33.6},
+  'San Francisco':    {lon:-123.0,lat:37.5},
+  'Vancouver':        {lon:-124.0,lat:49.1},
+  'Lima':             {lon:-77.4, lat:-12.3},
+  'Honolulu':         {lon:-158.2,lat:21.0},
+  'Auckland':         {lon:174.5, lat:-37.1}
+};
+
+function seaEndpoint(city){
+  return PORT_APPROACHES[city.name] || city;
+}
+
 const MARITIME_NODES = {
-  tokyo_offshore:      {lon:141.5, lat:34.5},
-  east_china_sea:      {lon:128.0, lat:27.0},
-  south_china_sea:     {lon:114.0, lat:13.0},
-  malacca_east:        {lon:103.2, lat:1.4},
-  malacca_west:        {lon:99.5, lat:5.5},
-  bay_of_bengal:       {lon:88.0, lat:8.0},
-  sri_lanka_south:     {lon:80.0, lat:5.0},
-  arabian_sea:         {lon:64.0, lat:12.0},
-  gulf_of_aden:        {lon:49.0, lat:12.5},
-  bab_el_mandeb:       {lon:43.2, lat:12.6},
-  red_sea_south:       {lon:39.0, lat:18.0},
-  red_sea_north:       {lon:34.0, lat:27.0},
-  suez_south:          {lon:32.55, lat:29.8},
-  suez_north:          {lon:32.35, lat:31.3},
-  east_med:            {lon:27.0, lat:34.0},
-  central_med:         {lon:16.0, lat:37.0},
-  gibraltar_east:      {lon:-4.5, lat:36.0},
-  gibraltar_west:      {lon:-7.5, lat:35.5},
-  bay_of_biscay:       {lon:-8.0, lat:45.0},
-  english_channel:     {lon:-3.0, lat:49.5},
-  london_approach:     {lon:1.5, lat:51.2},
+  // East / Southeast Asia
+  japan_south:        {lon:141.5, lat:33.5},
+  east_china_sea:     {lon:128.0, lat:26.0},
+  philippine_sea:     {lon:132.0, lat:17.0},
+  south_china_sea:    {lon:114.0, lat:12.0},
+  malacca_east:       {lon:103.0, lat:1.2},
+  malacca_west:       {lon:99.0,  lat:5.5},
 
-  cape_good_hope_east: {lon:21.0, lat:-36.0},
-  cape_good_hope_west: {lon:14.0, lat:-35.0},
-  west_africa:         {lon:-10.0, lat:5.0},
-  north_atlantic_east: {lon:-15.0, lat:40.0},
+  // Indian Ocean / Suez
+  bay_of_bengal:      {lon:88.0,  lat:7.0},
+  sri_lanka_south:    {lon:80.0,  lat:4.0},
+  indian_central:     {lon:70.0,  lat:-8.0},
+  arabian_sea:        {lon:62.0,  lat:11.0},
+  gulf_of_aden:       {lon:48.0,  lat:12.0},
+  bab_el_mandeb:      {lon:43.2,  lat:12.5},
+  red_sea_south:      {lon:39.5,  lat:18.0},
+  red_sea_mid:        {lon:36.5,  lat:23.5},
+  red_sea_north:      {lon:34.0,  lat:27.5},
+  suez_south:         {lon:32.55, lat:29.7},
+  suez_north:         {lon:32.35, lat:31.4},
 
-  panama_pacific:      {lon:-80.5, lat:7.0},
-  panama_atlantic:     {lon:-79.5, lat:10.0},
-  caribbean:           {lon:-70.0, lat:18.0},
-  north_atlantic_west: {lon:-45.0, lat:40.0},
+  // Mediterranean / Europe
+  east_med:           {lon:27.0,  lat:34.0},
+  central_med:        {lon:16.0,  lat:36.0},
+  west_med:           {lon:3.0,   lat:37.0},
+  gibraltar_east:     {lon:-4.5,  lat:36.0},
+  gibraltar_west:     {lon:-8.0,  lat:35.5},
+  iberia_atlantic:    {lon:-12.0, lat:41.0},
+  bay_of_biscay:      {lon:-8.0,  lat:45.5},
+  english_channel:    {lon:-3.0,  lat:49.5},
 
-  bering_south:        {lon:175.0, lat:52.0},
-  bering_north:        {lon:-170.0, lat:60.0},
-  north_pacific:       {lon:-150.0, lat:42.0}
+  // Africa / South Atlantic
+  mozambique_channel: {lon:42.0,  lat:-20.0},
+  cape_indian:        {lon:24.0,  lat:-36.0},
+  cape_atlantic:      {lon:16.0,  lat:-36.0},
+  namibia_offshore:   {lon:8.0,   lat:-25.0},
+  south_atlantic_e:   {lon:-5.0,  lat:-15.0},
+  south_atlantic_mid: {lon:-25.0, lat:-10.0},
+  brazil_offshore:    {lon:-38.0, lat:-15.0},
+  equatorial_atl:     {lon:-35.0, lat:5.0},
+  north_atlantic_e:   {lon:-20.0, lat:35.0},
+  north_atlantic_mid: {lon:-40.0, lat:30.0},
+  north_atlantic_w:   {lon:-60.0, lat:30.0},
+
+  // Caribbean / Panama
+  caribbean_east:     {lon:-64.0, lat:17.0},
+  caribbean_west:     {lon:-76.0, lat:16.0},
+  panama_atlantic:    {lon:-79.7, lat:9.5},
+  panama_pacific:     {lon:-80.2, lat:7.4},
+
+  // Pacific Americas
+  east_pacific_eq:    {lon:-90.0,  lat:2.0},
+  mexico_pacific:     {lon:-105.0, lat:17.0},
+  baja_offshore:      {lon:-116.0, lat:27.0},
+  california_south:   {lon:-119.0, lat:33.0},
+  california_north:   {lon:-124.5, lat:39.0},
+  pacific_nw:         {lon:-128.0, lat:48.0},
+
+  // Central / North Pacific
+  hawaii_west:        {lon:-160.0, lat:20.0},
+  north_pacific_mid:  {lon:-170.0, lat:35.0},
+  bering_south:       {lon:175.0,  lat:52.0},
+
+  // South Pacific
+  south_pacific_e:    {lon:-120.0, lat:-25.0},
+  south_pacific_mid:  {lon:-160.0, lat:-30.0},
+  nz_north:           {lon:175.0,  lat:-35.0},
+  australia_south:    {lon:135.0,  lat:-40.0},
+  australia_west:     {lon:112.0,  lat:-30.0}
 };
 
 const MARITIME_EDGES = [
-  ['tokyo_offshore','east_china_sea'],
+  // Asia to Malacca
+  ['japan_south','east_china_sea'],
+  ['japan_south','philippine_sea'],
   ['east_china_sea','south_china_sea'],
+  ['philippine_sea','south_china_sea'],
   ['south_china_sea','malacca_east'],
   ['malacca_east','malacca_west'],
+
+  // Malacca to Indian Ocean
   ['malacca_west','bay_of_bengal'],
   ['bay_of_bengal','sri_lanka_south'],
-  ['sri_lanka_south','arabian_sea'],
+  ['sri_lanka_south','indian_central'],
+  ['indian_central','arabian_sea'],
   ['arabian_sea','gulf_of_aden'],
+
+  // Suez corridor
   ['gulf_of_aden','bab_el_mandeb'],
   ['bab_el_mandeb','red_sea_south'],
-  ['red_sea_south','red_sea_north'],
+  ['red_sea_south','red_sea_mid'],
+  ['red_sea_mid','red_sea_north'],
   ['red_sea_north','suez_south'],
   ['suez_south','suez_north'],
   ['suez_north','east_med'],
   ['east_med','central_med'],
-  ['central_med','gibraltar_east'],
+  ['central_med','west_med'],
+  ['west_med','gibraltar_east'],
   ['gibraltar_east','gibraltar_west'],
-  ['gibraltar_west','bay_of_biscay'],
+  ['gibraltar_west','iberia_atlantic'],
+  ['iberia_atlantic','bay_of_biscay'],
   ['bay_of_biscay','english_channel'],
-  ['english_channel','london_approach'],
 
-  ['arabian_sea','cape_good_hope_east'],
-  ['cape_good_hope_east','cape_good_hope_west'],
-  ['cape_good_hope_west','west_africa'],
-  ['west_africa','north_atlantic_east'],
-  ['north_atlantic_east','gibraltar_west'],
+  // Around Africa
+  ['indian_central','mozambique_channel'],
+  ['mozambique_channel','cape_indian'],
+  ['cape_indian','cape_atlantic'],
+  ['cape_atlantic','namibia_offshore'],
+  ['namibia_offshore','south_atlantic_e'],
+  ['south_atlantic_e','south_atlantic_mid'],
+  ['south_atlantic_mid','brazil_offshore'],
+  ['brazil_offshore','equatorial_atl'],
 
-  ['tokyo_offshore','bering_south'],
-  ['bering_south','bering_north'],
-  ['bering_north','north_pacific'],
-  ['north_pacific','panama_pacific'],
-  ['panama_pacific','panama_atlantic'],
-  ['panama_atlantic','caribbean'],
-  ['caribbean','north_atlantic_west'],
-  ['north_atlantic_west','north_atlantic_east']
+  // Atlantic network
+  ['equatorial_atl','north_atlantic_mid'],
+  ['north_atlantic_mid','north_atlantic_e'],
+  ['north_atlantic_e','gibraltar_west'],
+  ['equatorial_atl','caribbean_east'],
+  ['caribbean_east','caribbean_west'],
+  ['caribbean_west','panama_atlantic'],
+  ['north_atlantic_w','caribbean_east'],
+  ['north_atlantic_mid','north_atlantic_w'],
+
+  // *** Critical Cape Town -> Panama route ***
+  ['south_atlantic_mid','equatorial_atl'],
+  ['equatorial_atl','caribbean_east'],
+
+  // Panama Canal into Pacific
+  ['panama_atlantic','panama_pacific'],
+  ['panama_pacific','east_pacific_eq'],
+  ['east_pacific_eq','mexico_pacific'],
+  ['mexico_pacific','baja_offshore'],
+  ['baja_offshore','california_south'],
+  ['california_south','california_north'],
+  ['california_north','pacific_nw'],
+
+  // Pacific routes
+  ['east_pacific_eq','south_pacific_e'],
+  ['south_pacific_e','south_pacific_mid'],
+  ['south_pacific_mid','nz_north'],
+  ['nz_north','australia_south'],
+  ['australia_south','australia_west'],
+  ['australia_west','indian_central'],
+
+  ['california_south','hawaii_west'],
+  ['hawaii_west','north_pacific_mid'],
+  ['north_pacific_mid','bering_south'],
+  ['bering_south','japan_south']
 ];
 
 function geoDistanceKm(a,b){
@@ -189,7 +299,8 @@ const MARITIME_ADJ = maritimeAdjacency();
 function shortestMaritimePath(startId,endId){
   const dist={}, prev={}, q=[];
   for(const id of Object.keys(MARITIME_NODES)) dist[id]=Infinity;
-  dist[startId]=0; q.push([0,startId]);
+  dist[startId]=0;
+  q.push([0,startId]);
 
   while(q.length){
     q.sort((a,b)=>a[0]-b[0]);
@@ -199,7 +310,9 @@ function shortestMaritimePath(startId,endId){
     for(const [v,w] of MARITIME_ADJ[u]){
       const nd=d+w;
       if(nd<dist[v]){
-        dist[v]=nd; prev[v]=u; q.push([nd,v]);
+        dist[v]=nd;
+        prev[v]=u;
+        q.push([nd,v]);
       }
     }
   }
@@ -213,6 +326,45 @@ function shortestMaritimePath(startId,endId){
   }
   ids.reverse();
   return ids;
+}
+
+function shipRoutePoints(a,b){
+  // IMPORTANT: animate from offshore approaches, not city centres on land.
+  const seaA=seaEndpoint(a);
+  const seaB=seaEndpoint(b);
+  const startNode=nearestMaritimeNode(seaA);
+  const endNode=nearestMaritimeNode(seaB);
+  const ids=shortestMaritimePath(startNode,endNode);
+
+  const mids=ids.map(id=>MARITIME_NODES[id]);
+
+  // Deduplicate very close points so the ship does not jitter near ports.
+  const pts=[seaA,...mids,seaB];
+  const out=[];
+  for(const p of pts){
+    if(!out.length || geoDistanceKm(out[out.length-1],p)>35) out.push(p);
+  }
+  return out;
+}
+
+function routeForMode(a,b,mode){
+  if(mode==='ship'){
+    const pts=shipRoutePoints(a,b);
+    const poly=polylinePath(pts);
+    return {
+      kind:'polyline',
+      d:poly.d,
+      points:poly.points,
+      distanceKm:pts.slice(0,-1).reduce((s,p,i)=>s+geoDistanceKm(p,pts[i+1]),0)
+    };
+  }
+
+  const base=curvePathBase(a,b,mode);
+  return {
+    kind:'quadratic',
+    ...base,
+    distanceKm:geoDistanceKm(a,b)
+  };
 }
 
 function unwrapProjectedPoints(points){
@@ -401,21 +553,40 @@ function renderWorld(){
     'Oceania':['#d6df8a','#c8d77c','#e1e698'],
     'Seven seas (open ocean)':['#b7d786']
   };
-  const parts=[];
+  const underlay=[];
+  const fills=[];
+  const borders=[];
+
   for(const offset of copies){
     WORLD_COUNTRIES.forEach((country,idx)=>{
       const colors=palette[country.c] || ['#bdd782','#aaca78','#cddf91'];
       const fill=colors[idx%colors.length];
+
       country.p.forEach(poly=>{
         const pts=poly.map(([lon,lat])=>{
           const p=project(lon,lat);
           return `${p.x+offset},${p.y}`;
         }).join(' ');
-        parts.push(`<polygon points="${pts}" fill="${fill}" stroke="#6f956d" stroke-width="0.65" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
+
+        // Thick land-coloured underlay closes tiny SVG anti-aliasing seams.
+        underlay.push(
+          `<polygon points="${pts}" fill="#b8d77f" stroke="#b8d77f" stroke-width="2.4" stroke-linejoin="round"/>`
+        );
+
+        // Country fill itself has no stroke, so neighbouring fills meet cleanly.
+        fills.push(
+          `<polygon points="${pts}" fill="${fill}" stroke="none"/>`
+        );
+
+        // Border line is drawn separately above all fills.
+        borders.push(
+          `<polyline points="${pts}" fill="none" stroke="#76956f" stroke-width="0.55" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
+        );
       });
     });
   }
-  landEl.innerHTML=parts.join('');
+
+  landEl.innerHTML=underlay.join('')+fills.join('')+borders.join('');
 }
 
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
