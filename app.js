@@ -223,7 +223,7 @@ function vehicleMarkup(mode){
   const icons = {
     plane: `
       <image
-        href="./assets/plane.png"
+        href="./plane.png"
         x="-72"
         y="-72"
         width="144"
