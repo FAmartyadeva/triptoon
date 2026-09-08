@@ -454,6 +454,50 @@ function shipRoutePoints(a,b){
   return makeSeaSafeRoute(out);
 }
 
+
+// OSM transport graphs are generated once at build time and bundled locally.
+// CAR_NETWORK = motorway/trunk only. TRAIN_NETWORK = railway=rail.
+function nearestTransportNode(network,p,maxKm){
+  if(!network || !network.nodes) return null;
+  let best=null,bestD=Infinity;
+  for(const [id,n] of Object.entries(network.nodes)){
+    const d=geoDistanceKm(p,n);
+    if(d<bestD){bestD=d;best=id;}
+  }
+  return bestD<=maxKm?best:null;
+}
+function transportShortestPath(network,startId,endId){
+  if(!network||!startId||!endId)return null;
+  const dist={[startId]:0},prev={},q=[[0,startId]];
+  while(q.length){
+    q.sort((a,b)=>a[0]-b[0]);
+    const [d,u]=q.shift();
+    if(d!==dist[u])continue;
+    if(u===endId)break;
+    for(const [v,w] of (network.adj[u]||[])){
+      const nd=d+w;
+      if(nd<(dist[v]??Infinity)){dist[v]=nd;prev[v]=u;q.push([nd,v]);}
+    }
+  }
+  if(startId!==endId && prev[endId]===undefined)return null;
+  const ids=[];let cur=endId;
+  while(cur!==undefined){ids.push(cur);if(cur===startId)break;cur=prev[cur];}
+  ids.reverse();return ids;
+}
+function transportRoute(a,b,mode){
+  const network=mode==='car'?window.CAR_NETWORK:window.TRAIN_NETWORK;
+  const maxSnap=mode==='car'?120:80;
+  const s=nearestTransportNode(network,a,maxSnap), e=nearestTransportNode(network,b,maxSnap);
+  if(!s||!e)return null;
+  const ids=transportShortestPath(network,s,e);
+  if(!ids||ids.length<2)return null;
+  const geo=ids.map(id=>network.nodes[id]);
+  const poly=polylinePath(geo);
+  return {kind:'polyline',d:poly.d,points:poly.points,
+    distanceKm:geo.slice(0,-1).reduce((sum,p,i)=>sum+geoDistanceKm(p,geo[i+1]),0),
+    transportData:true};
+}
+
 function routeForMode(a,b,mode){
   if(mode==='ship'){
     const pts=shipRoutePoints(a,b);
@@ -466,11 +510,17 @@ function routeForMode(a,b,mode){
     };
   }
 
+  if(mode==='car' || mode==='train'){
+    const realRoute=transportRoute(a,b,mode);
+    if(realRoute) return realRoute;
+  }
+
   const base=curvePathBase(a,b,mode);
   return {
     kind:'quadratic',
     ...base,
-    distanceKm:geoDistanceKm(a,b)
+    distanceKm:geoDistanceKm(a,b),
+    transportData:false
   };
 }
 
