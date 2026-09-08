@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#f3eadb" />
+  <meta name="theme-color" content="#0f79bd" />
   <title>TripToon</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -23,11 +23,13 @@
       <button id="addStop" class="add-btn">＋ Add destination</button>
 
       <div class="section-title top-gap">Animation</div>
-      <label class="range-label"><span>Duration</span><strong id="durationLabel">18s</strong></label>
+      <div class="setting-card">
+      <label class="range-label"><span>Video duration</span><strong id="durationLabel">18s</strong></label>
       <input id="duration" class="range" type="range" min="2" max="45" value="18" step="1" />
+      </div>
 
       <div class="actions">
-        <button id="playBtn" class="primary">▶ Play</button>
+        <button id="playBtn" class="primary">▶ Play Animation</button>
         <button id="resetBtn" class="secondary">↻ Reset</button>
       </div>
       <button id="exportBtn" class="export-btn">⇩ Export WebM</button>
@@ -35,23 +37,70 @@
     </aside>
 
     <main class="stage-wrap">
-      <div class="phone-frame">
-        <svg id="mapSvg" class="map-svg" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
-          <rect width="1080" height="1920" fill="#f4f0e8" />
-          <rect x="60" y="450" width="960" height="480" rx="26" fill="#dcecef" stroke="#a9c0c5" stroke-width="3"/>
-          <g id="graticule" stroke="#ffffff" stroke-width="2" opacity="0.34"></g>
-          <g id="continents" fill="#c8d2b4" stroke="#7d8f78" stroke-width="2.6" stroke-linejoin="round" opacity="0.98"></g>
-          <text x="540" y="120" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="58" fill="#203742">MY JOURNEY</text>
-          <text id="subtitle" x="540" y="176" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#61747c">TRIPTOON • 3 STOPS</text>
-          <g id="routes"></g>
-          <g id="markers"></g>
-          <g id="vehicle"></g>
-          <text x="540" y="1800" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" fill="#61747c">Made with TripToon • 100% local animation</text>
-        </svg>
+      <div class="phone-shell">
+        <div class="phone-frame">
+          <svg id="mapSvg" class="map-svg" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="oceanGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#60c5f4"/>
+                <stop offset="0.52" stop-color="#209edb"/>
+                <stop offset="1" stop-color="#0878bc"/>
+              </linearGradient>
+              <linearGradient id="landGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#cce980"/>
+                <stop offset="0.55" stop-color="#a8d66f"/>
+                <stop offset="1" stop-color="#84bd62"/>
+              </linearGradient>
+              <filter id="vehicleShadow" x="-80%" y="-80%" width="260%" height="260%">
+                <feDropShadow dx="10" dy="16" stdDeviation="9" flood-color="#003b63" flood-opacity="0.38"/>
+              </filter>
+              <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+                <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#043f63" flood-opacity="0.22"/>
+              </filter>
+              <clipPath id="mapClip"><rect x="0" y="0" width="1080" height="1920" rx="54"/></clipPath>
+            </defs>
+
+            <g clip-path="url(#mapClip)">
+              <rect id="ocean" width="1080" height="1920" fill="url(#oceanGradient)"/>
+              <g id="oceanTexture" opacity="0.10">
+                <path d="M0 470 C220 420 350 560 560 510 S860 400 1080 470" fill="none" stroke="#ffffff" stroke-width="4"/>
+                <path d="M0 1130 C250 1080 360 1220 590 1160 S860 1070 1080 1130" fill="none" stroke="#ffffff" stroke-width="3"/>
+              </g>
+              <g id="camera">
+                <g id="graticule" stroke="#ffffff" stroke-width="1.5" opacity="0.14"></g>
+                <g id="continents" fill="url(#landGradient)" stroke="#558c5d" stroke-width="2.2" stroke-linejoin="round"></g>
+                <g id="routes"></g>
+                <g id="markers"></g>
+                <g id="vehicle" filter="url(#vehicleShadow)"></g>
+              </g>
+            </g>
+
+            <g id="topOverlay" filter="url(#softShadow)">
+              <rect x="92" y="72" width="896" height="150" rx="38" fill="#ffffff" fill-opacity="0.86"/>
+              <text x="132" y="126" font-family="Arial, sans-serif" font-weight="700" font-size="24" letter-spacing="4" fill="#607786">MY JOURNEY</text>
+              <text id="journeyTitle" x="132" y="174" font-family="Arial, sans-serif" font-weight="900" font-size="34" fill="#0f2635">Jakarta → Singapore → Tokyo</text>
+              <text id="subtitle" x="132" y="205" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#607786">3 STOPS • 18 SECONDS</text>
+            </g>
+
+            <g id="legOverlay" filter="url(#softShadow)">
+              <rect x="72" y="1648" width="650" height="142" rx="34" fill="#083f65" fill-opacity="0.76"/>
+              <text id="legMode" x="116" y="1704" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">✈</text>
+              <text id="legTitle" x="168" y="1705" font-family="Arial, sans-serif" font-size="29" font-weight="800" fill="#ffffff">Jakarta → Singapore</text>
+              <text id="legDistance" x="168" y="1748" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="#d9f1ff">~ 890 km</text>
+            </g>
+            <g filter="url(#softShadow)">
+              <rect x="790" y="1666" width="218" height="90" rx="28" fill="#ffffff" fill-opacity="0.88"/>
+              <text id="timeOverlay" x="899" y="1722" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="900" fill="#15384c">0s / 18s</text>
+            </g>
+            <rect x="92" y="1834" width="896" height="14" rx="7" fill="#ffffff" fill-opacity="0.32"/>
+            <rect id="progressBar" x="92" y="1834" width="0" height="14" rx="7" fill="#ffffff"/>
+          </svg>
+        </div>
       </div>
     </main>
   </div>
 
+  <script src="world-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

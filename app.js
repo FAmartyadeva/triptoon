@@ -2,7 +2,9 @@ const WIDTH = 1080;
 const HEIGHT = 1920;
 
 // Keep the geographic map itself close to a 2:1 world-map ratio inside the 9:16 video.
-const MAP = { x: 60, y: 450, width: 960, height: 480 };
+const MAP = { x: 0, y: 0, width: 1080, height: 540 };
+const SCREEN = { width: WIDTH, height: HEIGHT };
+const CAMERA_CENTER_Y = 980;
 
 const cities = [
   ['Jakarta','Indonesia',106.8456,-6.2088],['Bali','Indonesia',115.1889,-8.4095],['Surabaya','Indonesia',112.7521,-7.2575],
@@ -32,42 +34,6 @@ const modes = {
   ship: {label:'Ship', emoji:'🚢'}
 };
 
-// Deliberately simplified coastlines, stored locally as lon/lat points.
-// Unlike the old version, these are projected into a true world-map viewport,
-// so the globe is not vertically stretched by the 9:16 video canvas.
-const landShapes = [
-  // North America
-  [[-168,72],[-150,70],[-140,60],[-130,55],[-125,49],[-124,40],[-117,32],[-107,25],[-97,20],[-88,18],[-82,24],[-80,30],[-74,40],[-67,45],[-61,53],[-70,60],[-82,64],[-95,70],[-110,72],[-125,72],[-145,75]],
-  // Greenland
-  [[-73,82],[-25,82],[-20,70],[-35,60],[-50,59],[-60,66],[-68,75]],
-  // South America
-  [[-81,12],[-72,10],[-62,6],[-52,3],[-45,-5],[-39,-15],[-43,-23],[-50,-30],[-54,-40],[-65,-55],[-73,-51],[-75,-38],[-79,-22],[-81,-8]],
-  // Europe + Asia
-  [[-10,36],[-9,44],[-5,50],[5,55],[18,58],[30,60],[40,67],[60,72],[85,75],[110,72],[135,65],[160,60],[177,52],[170,45],[150,43],[140,36],[130,32],[121,24],[112,19],[105,10],[98,7],[90,20],[80,22],[72,18],[61,22],[50,28],[42,34],[35,40],[28,43],[20,39],[12,42],[4,43]],
-  // Scandinavia
-  [[5,55],[10,64],[18,71],[28,72],[32,66],[25,59],[18,56]],
-  // Africa
-  [[-17,36],[-5,37],[10,35],[25,32],[34,28],[40,15],[50,10],[43,-5],[38,-18],[31,-30],[20,-35],[10,-34],[2,-26],[-5,-12],[-12,5],[-17,20]],
-  // Arabian peninsula
-  [[35,31],[48,30],[56,24],[52,15],[44,12],[39,20]],
-  // India
-  [[68,24],[78,31],[88,25],[84,16],[77,7],[72,12]],
-  // Australia
-  [[113,-10],[129,-11],[144,-10],[153,-20],[151,-34],[140,-39],[125,-35],[115,-27]],
-  // New Zealand
-  [[166,-34],[178,-37],[174,-47],[168,-45]],
-  // Japan
-  [[130,33],[136,36],[141,42],[145,44],[143,36],[138,33]],
-  // Indonesia main silhouette
-  [[95,5],[105,2],[115,-4],[126,-3],[135,-5],[141,-8],[132,-10],[120,-8],[110,-7],[100,-6]],
-  // UK / Ireland
-  [[-10,50],[-7,58],[-2,59],[1,52],[-4,50]],
-  // Madagascar
-  [[46,-13],[50,-18],[49,-26],[45,-24]],
-  // Iceland
-  [[-25,63],[-13,64],[-14,68],[-22,67]]
-];
-
 let stops = [
   {city:'Jakarta',mode:'plane'},
   {city:'Singapore',mode:'plane'},
@@ -83,6 +49,7 @@ const routesEl = document.getElementById('routes');
 const markersEl = document.getElementById('markers');
 const vehicleEl = document.getElementById('vehicle');
 const subtitleEl = document.getElementById('subtitle');
+const journeyTitleEl = document.getElementById('journeyTitle');
 const durationEl = document.getElementById('duration');
 const durationLabelEl = document.getElementById('durationLabel');
 const landEl = document.getElementById('continents');
@@ -162,20 +129,80 @@ function getDurationSeconds(){
 }
 
 function renderWorld(){
+  // Actual Natural Earth country boundaries are bundled in world-data.js.
+  // No map/API request is made at runtime. We still draw three copies so
+  // routes crossing the International Date Line remain visually continuous.
+  const copies=[-MAP.width,0,MAP.width];
   const lineParts=[];
-  for(let lon=-150; lon<=150; lon+=30){
-    const a=project(lon,-75), b=project(lon,75);
-    lineParts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`);
-  }
-  for(let lat=-60; lat<=60; lat+=30){
-    const a=project(-180,lat), b=project(180,lat);
-    lineParts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`);
+  for(const offset of copies){
+    for(let lon=-150; lon<=150; lon+=30){
+      const a=project(lon,-82), b=project(lon,82);
+      lineParts.push(`<line x1="${a.x+offset}" y1="${a.y}" x2="${b.x+offset}" y2="${b.y}"/>`);
+    }
+    for(let lat=-60; lat<=60; lat+=30){
+      const a=project(-180,lat), b=project(180,lat);
+      lineParts.push(`<line x1="${a.x+offset}" y1="${a.y}" x2="${b.x+offset}" y2="${b.y}"/>`);
+    }
   }
   graticuleEl.innerHTML=lineParts.join('');
-  landEl.innerHTML=landShapes.map(shape=>{
-    const pts=shape.map(([lon,lat])=>{const p=project(lon,lat);return `${p.x},${p.y}`;}).join(' ');
-    return `<polygon points="${pts}"/>`;
-  }).join('');
+
+  const palette={
+    'Asia':['#b9dc79','#a8d272','#c8e28a'],
+    'Europe':['#c5dc88','#b8d47e','#d1e59a'],
+    'Africa':['#d8df88','#cdd77b','#e2e59a'],
+    'North America':['#afd383','#bedb90','#a2cb78'],
+    'South America':['#a8d47c','#bada87','#95c870'],
+    'Oceania':['#d6df8a','#c8d77c','#e1e698'],
+    'Seven seas (open ocean)':['#b7d786']
+  };
+  const parts=[];
+  for(const offset of copies){
+    WORLD_COUNTRIES.forEach((country,idx)=>{
+      const colors=palette[country.c] || ['#bdd782','#aaca78','#cddf91'];
+      const fill=colors[idx%colors.length];
+      country.p.forEach(poly=>{
+        const pts=poly.map(([lon,lat])=>{
+          const p=project(lon,lat);
+          return `${p.x+offset},${p.y}`;
+        }).join(' ');
+        parts.push(`<polygon points="${pts}" fill="${fill}" stroke="#71966e" stroke-width="0.8" vector-effect="non-scaling-stroke"/>`);
+      });
+    });
+  }
+  landEl.innerHTML=parts.join('');
+}
+
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+
+function cameraState(segments){
+  if(!segments.length){
+    return {x:MAP.width/2,y:MAP.height/2,scale:3.15};
+  }
+  const active=activeSegmentAt(segments,progress);
+  const {seg,t}=active;
+  const pt=qPoint(seg.p1,seg.c,seg.p2,t);
+
+  // Camera zoom is based on leg length: local trips are closer, long-haul
+  // flights pull back slightly, but the map always occupies most of 9:16.
+  const d=Math.max(1,seg.distanceKm);
+  const scale=clamp(6.25-Math.log10(d)*0.95,3.0,4.9);
+
+  // Follow the vehicle but look a little ahead along the current leg so the
+  // destination remains visible and movement feels intentional.
+  const aheadT=clamp(t+0.14,0,1);
+  const ahead=qPoint(seg.p1,seg.c,seg.p2,aheadT);
+  const x=pt.x*0.72+ahead.x*0.28;
+  const y=pt.y*0.72+ahead.y*0.28;
+  return {x,y,scale};
+}
+
+function applyCamera(segments){
+  const camera=document.getElementById('camera');
+  if(!camera) return;
+  const c=cameraState(segments);
+  // SVG transform order is evaluated right-to-left. This centers the chosen
+  // geographic point in the phone frame, then zooms around it.
+  camera.setAttribute('transform',`translate(${SCREEN.width/2} ${CAMERA_CENTER_Y}) scale(${c.scale}) translate(${-c.x} ${-c.y})`);
 }
 
 function renderControls(){
@@ -194,30 +221,58 @@ function renderControls(){
 
 function vehicleMarkup(mode){
   const icons = {
-    plane: '<path d="M-34 2 L-8 -5 L7 -34 L17 -34 L12 -4 L35 3 L35 10 L11 7 L16 30 L7 30 L-7 8 L-34 9 Z" fill="#24303a"/>',
-    car: '<rect x="-29" y="-10" width="58" height="24" rx="8" fill="#24303a"/><path d="M-18 -10 L-8 -24 H13 L25 -10 Z" fill="#24303a"/><circle cx="-18" cy="17" r="8" fill="#24303a"/><circle cx="19" cy="17" r="8" fill="#24303a"/>',
-    train: '<rect x="-28" y="-27" width="56" height="50" rx="10" fill="#24303a"/><rect x="-19" y="-17" width="14" height="13" rx="2" fill="#eef6f7"/><rect x="5" y="-17" width="14" height="13" rx="2" fill="#eef6f7"/><circle cx="-17" cy="28" r="7" fill="#24303a"/><circle cx="17" cy="28" r="7" fill="#24303a"/>',
-    ship: '<path d="M-34 8 H34 L23 27 H-22 Z" fill="#24303a"/><rect x="-10" y="-22" width="26" height="30" rx="3" fill="#24303a"/><rect x="-3" y="-15" width="12" height="8" fill="#eef6f7"/>'
+    plane: `<g transform="scale(1.18)">
+      <path d="M-41 4 L-13 -4 L5 -41 L18 -41 L12 -4 L41 5 L41 13 L11 9 L18 36 L7 36 L-8 10 L-41 12 Z" fill="#f7fbfd" stroke="#18394c" stroke-width="2.5"/>
+      <path d="M10 -38 L18 -41 L14 -10 L4 -8 Z" fill="#e94242"/>
+      <path d="M-7 8 L13 8 L18 36 L7 36 Z" fill="#e94242" opacity=".9"/>
+    </g>`,
+    car: '<rect x="-32" y="-11" width="64" height="27" rx="9" fill="#f4f8fa" stroke="#18394c" stroke-width="3"/><path d="M-20 -11 L-9 -27 H14 L27 -11 Z" fill="#e94242" stroke="#18394c" stroke-width="3"/><circle cx="-20" cy="19" r="8" fill="#18394c"/><circle cx="21" cy="19" r="8" fill="#18394c"/>',
+    train: '<rect x="-29" y="-29" width="58" height="54" rx="11" fill="#f4f8fa" stroke="#18394c" stroke-width="3"/><rect x="-20" y="-18" width="15" height="14" rx="2" fill="#79c6ed"/><rect x="5" y="-18" width="15" height="14" rx="2" fill="#79c6ed"/><path d="M-24 11 H24" stroke="#e94242" stroke-width="5"/><circle cx="-17" cy="30" r="7" fill="#18394c"/><circle cx="17" cy="30" r="7" fill="#18394c"/>',
+    ship: '<path d="M-37 8 H37 L25 30 H-25 Z" fill="#f4f8fa" stroke="#18394c" stroke-width="3"/><rect x="-11" y="-24" width="28" height="32" rx="3" fill="#e94242" stroke="#18394c" stroke-width="3"/><rect x="-4" y="-16" width="13" height="9" fill="#cfeaf7"/>'
   };
-  return `<circle r="43" fill="#fff" stroke="#24303a" stroke-width="4" opacity=".96"/>${icons[mode] || icons.plane}`;
+  return `<circle r="49" fill="#ffffff" fill-opacity=".96" stroke="#18394c" stroke-width="3"/>${icons[mode] || icons.plane}`;
 }
 
 function renderMap(){
   const resolved=getResolved(), segments=getSegments();
-  subtitleEl.textContent=`TRIPTOON • ${resolved.length} STOPS`;
+  subtitleEl.textContent=`${resolved.length} STOPS • ${getDurationSeconds()} SECONDS`;
+  if(journeyTitleEl) journeyTitleEl.textContent=resolved.map(s=>s.data.name).join(' → ');
   routesEl.innerHTML=''; markersEl.innerHTML='';
+
+  // Apply the follow-camera before drawing. Routes may intentionally use an
+  // unwrapped x coordinate (e.g. Singapore -> Vancouver); the repeated world
+  // copies keep the geography continuous underneath them.
+  applyCamera(segments);
+
   segments.forEach(seg=>{
     const amount=segmentProgress(seg,progress);
-    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" opacity=".75"/><path d="${seg.d}" fill="none" stroke="#586b75" stroke-width="7" stroke-linecap="round" stroke-dasharray="16 14" opacity=".42"/><path d="${seg.d}" fill="none" stroke="#203742" stroke-width="8" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
+    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity=".82"/><path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="5" stroke-linecap="round" stroke-dasharray="12 10" opacity=".38"/><path d="${seg.d}" fill="none" stroke="#17384a" stroke-width="6" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
   });
-  resolved.forEach(s=>{
+
+  // Repeat labels/markers horizontally too, so labels remain attached to land
+  // when the camera crosses the date line.
+  for(const s of resolved){
     const p=project(s.data.lon,s.data.lat);
-    markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x} ${p.y})"><circle r="13" fill="#203742"/><circle r="5" fill="#f8fbfb"/><rect x="-70" y="19" width="140" height="42" rx="21" fill="#ffffff" stroke="#b8c6c9"/><text x="0" y="47" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#203742">${esc(s.data.name)}</text></g>`);
-  });
+    for(const offset of [-MAP.width,0,MAP.width]){
+      markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x+offset} ${p.y})"><circle r="9" fill="#17384a"/><circle r="3.5" fill="#ffffff"/><rect x="-55" y="14" width="110" height="31" rx="15.5" fill="#ffffff" fill-opacity=".94" stroke="#bdd2d8" stroke-width="1"/><text x="0" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#17384a">${esc(s.data.name)}</text></g>`);
+    }
+  }
+
+  const legTitle=document.getElementById('legTitle');
+  const legDistance=document.getElementById('legDistance');
+  const legMode=document.getElementById('legMode');
+  const timeOverlay=document.getElementById('timeOverlay');
+  const progressBar=document.getElementById('progressBar');
+  if(timeOverlay) timeOverlay.textContent=`${Math.round(progress*getDurationSeconds())}s / ${getDurationSeconds()}s`;
+  if(progressBar) progressBar.setAttribute('width',String(896*progress));
 
   if(!segments.length){ vehicleEl.innerHTML=''; return; }
   const active=activeSegmentAt(segments,progress);
   const seg=active.seg, t=active.t;
+  if(legTitle) legTitle.textContent=`${seg.from.name} → ${seg.to.name}`;
+  if(legDistance) legDistance.textContent=`~ ${Math.round(seg.distanceKm).toLocaleString()} km`;
+  if(legMode) legMode.textContent=({plane:'✈',car:'🚗',train:'🚆',ship:'🚢'})[seg.mode] || '✈';
+
   const pt=qPoint(seg.p1,seg.c,seg.p2,t), tan=qTangent(seg.p1,seg.c,seg.p2,t);
   const angle=Math.atan2(tan.y,tan.x)*180/Math.PI;
   let sprite=document.getElementById('vehicleSprite');
@@ -225,11 +280,9 @@ function renderMap(){
     vehicleEl.innerHTML=`<g id="vehicleSprite" data-mode="${seg.mode}">${vehicleMarkup(seg.mode)}</g>`;
     sprite=document.getElementById('vehicleSprite');
   }
-  // Wrap the sprite if a route crosses the international date line.
-  let vx=pt.x;
-  while(vx < MAP.x) vx += MAP.width;
-  while(vx > MAP.x+MAP.width) vx -= MAP.width;
-  sprite.setAttribute('transform',`translate(${vx} ${pt.y}) rotate(${angle})`);
+  // Do NOT wrap the vehicle back into the base tile. The camera and repeated
+  // map tiles follow its continuous x coordinate naturally.
+  sprite.setAttribute('transform',`translate(${pt.x} ${pt.y}) rotate(${angle})`);
 }
 
 function animate(){

@@ -1,37 +1,26 @@
-# TripToon
+# TripToon V7 — Fullscreen Map
 
-TripToon is a zero-paid-API animated travel map MVP.
+A zero-paid-API travel animation MVP.
 
-## What it does
-- Uses an embedded SVG world map
-- Uses an embedded local city database
-- Lets users create multi-city trips
-- Supports plane, car, train, and ship animations
-- Draws animated routes
-- Shows a vertical 9:16 preview
-- Exports WebM in-browser
-- Makes no calls to Google Maps, Mapbox, HERE, or paid routing APIs
+## V7 changes
+- The map now fills the entire 9:16 video frame.
+- Route/vehicle rendering is clipped to the video frame, so it can no longer visually escape a smaller map card.
+- Replaced hand-drawn continent silhouettes with bundled Natural Earth low-resolution country boundaries.
+- Country shapes are rendered locally from `world-data.js`; there is no runtime map API call.
+- Camera continues to follow the active leg.
+- Leg timing remains proportional to Haversine distance.
+- Updated journey overlay, route styling, vehicle artwork, and bottom status card.
 
 ## Run locally
-No installation is required.
+Open `index.html` directly in Chrome/Edge, or serve the folder with any static server.
 
-Option A: double-click `index.html`.
+## Deploy
+Upload all files in this folder to the root of your GitHub repository and deploy as a static project on Vercel.
 
-Option B, recommended if your browser blocks a local feature:
+Files:
+- `index.html`
+- `styles.css`
+- `app.js`
+- `world-data.js`
 
-```bash
-python3 -m http.server 8000
-```
-
-Then open `http://localhost:8000`.
-
-## Deploy on Vercel
-This project is static. Import the GitHub repository into Vercel and deploy with Framework Preset set to `Other`. No build command is required.
-
-## Files
-- `index.html` — page structure and embedded SVG map
-- `styles.css` — design
-- `app.js` — city data, route logic, animation, and WebM export
-
-## Important MVP limitation
-Car/train/ship routes are stylized curves between city coordinates, not real road/rail/sea routing. That is intentional so the app remains completely API-free.
+No npm install, build command, API key, Google Maps, Mapbox, or routing API is required.
