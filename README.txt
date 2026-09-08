@@ -1,11 +1,13 @@
-TripToon - Proportional Visuals for Car/Train Zoom
+TripToon update
 
-Changes:
-1. Car/train still use ~3x closer camera zoom.
-2. City labels/markers shrink by 3x during car/train legs.
-3. Vehicle PNG sprites shrink by 3x during car/train legs.
-4. Route line thickness and dash spacing shrink by 3x during car/train legs.
-5. Plane/ship appearance remains unchanged.
-6. Smooth camera transitions and distance-weighted timing remain unchanged.
+1. City dropdown is sorted alphabetically by country, then city.
+2. Dropdown format: Country, City.
+3. Overall duration input is hidden.
+4. Each leg has its own duration input.
+5. Demo defaults:
+   Indonesia, Jakarta -> Singapore, Singapore: 3 sec
+   Singapore, Singapore -> Japan, Tokyo: 20 sec
+6. Total video duration is automatically the sum of all leg durations.
+7. Existing zoom, proportional visuals, PNG vehicles and smooth camera are retained.
 
-Replace only your existing app.js with the app.js in this ZIP.
+Replace only app.js.

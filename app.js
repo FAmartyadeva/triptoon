@@ -26,6 +26,7 @@ const cities = [
   ['Moscow','Russia',37.6173,55.7558],['Reykjavik','Iceland',-21.9426,64.1466],['Honolulu','USA',-157.8583,21.3069],
   ['Auckland','New Zealand',174.7633,-36.8485],['Santiago','Chile',-70.6693,-33.4489],['Lima','Peru',-77.0428,-12.0464]
 ].map(([name,country,lon,lat]) => ({name,country,lon,lat}));
+cities.sort((a,b)=>a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
 
 const modes = {
   plane: {label:'Plane', emoji:'✈️'},
@@ -35,9 +36,9 @@ const modes = {
 };
 
 let stops = [
-  {city:'Jakarta',mode:'plane'},
-  {city:'Singapore',mode:'plane'},
-  {city:'Tokyo',mode:'plane'}
+  {city:'Jakarta',mode:'plane',duration:3},
+  {city:'Singapore',mode:'plane',duration:20},
+  {city:'Tokyo',mode:'plane',duration:0}
 ];
 let progress = 0;
 let playing = false;
@@ -52,6 +53,10 @@ const subtitleEl = document.getElementById('subtitle');
 const journeyTitleEl = document.getElementById('journeyTitle');
 const durationEl = document.getElementById('duration');
 const durationLabelEl = document.getElementById('durationLabel');
+if(durationEl){
+  const legacyDurationWrap=durationEl.closest('.duration-control') || durationEl.parentElement;
+  if(legacyDurationWrap) legacyDurationWrap.style.display='none';
+}
 const landEl = document.getElementById('continents');
 const graticuleEl = document.getElementById('graticule');
 
@@ -95,16 +100,17 @@ function getSegments(){
       from:s.data,
       to,
       mode:s.mode,
+      durationSec:legDurationSeconds(s),
       distanceKm:haversineKm(s.data,to),
       ...curvePath(s.data,to,s.mode)
     };
   });
-  const totalDistance=segments.reduce((sum,seg)=>sum+seg.distanceKm,0) || 1;
+  const totalDuration=segments.reduce((sum,seg)=>sum+seg.durationSec,0) || 1;
   let cumulative=0;
   return segments.map(seg=>{
-    const startShare=cumulative/totalDistance;
-    cumulative+=seg.distanceKm;
-    const endShare=cumulative/totalDistance;
+    const startShare=cumulative/totalDuration;
+    cumulative+=seg.durationSec;
+    const endShare=cumulative/totalDuration;
     return {...seg,startShare,endShare,share:endShare-startShare};
   });
 }
@@ -123,9 +129,12 @@ function activeSegmentAt(segments,overallProgress){
   return {seg,idx:idx<0?segments.length-1:idx,t:segmentProgress(seg,p)};
 }
 function esc(s){return String(s).replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function legDurationSeconds(stop){
+  const raw=Number(stop?.duration);
+  return Number.isFinite(raw) ? Math.max(0.5,Math.min(300,raw)) : 5;
+}
 function getDurationSeconds(){
-  const raw=Number(durationEl.value);
-  return Number.isFinite(raw) ? Math.max(2, Math.min(60, raw)) : 12;
+  return Math.max(0.5,stops.slice(0,-1).reduce((sum,s)=>sum+legDurationSeconds(s),0));
 }
 
 function renderWorld(){
@@ -246,11 +255,17 @@ function renderControls(){
   stopsEl.innerHTML='';
   stops.forEach((s,i)=>{
     const card=document.createElement('div'); card.className='stop-card';
-    const options=cities.map(c=>`<option value="${esc(c.name)}" ${c.name===s.city?'selected':''}>${esc(c.name)} — ${esc(c.country)}</option>`).join('');
+    const options=cities.map(c=>`<option value="${esc(c.name)}" ${c.name===s.city?'selected':''}>${esc(c.country)}, ${esc(c.name)}</option>`).join('');
     const modeButtons=i<stops.length-1?`<div class="mode-row">${Object.entries(modes).map(([key,m])=>`<button class="mode ${s.mode===key?'active':''}" data-mode="${key}">${m.emoji} ${m.label}</button>`).join('')}</div>`:'';
-    card.innerHTML=`<div class="stop-index">${i+1}</div><div class="stop-fields"><select>${options}</select>${modeButtons}</div><button class="icon-btn" ${stops.length<=2?'disabled':''}>✕</button>`;
+    const durationInput=i<stops.length-1?`<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;font-weight:700;color:#17384a">To next city <input class="leg-duration" type="number" min="0.5" max="300" step="0.5" value="${legDurationSeconds(s)}" style="width:72px;padding:7px 8px;border:1px solid #bdd2d8;border-radius:9px"> sec</label>`:'';
+    card.innerHTML=`<div class="stop-index">${i+1}</div><div class="stop-fields"><select>${options}</select>${modeButtons}${durationInput}</div><button class="icon-btn" ${stops.length<=2?'disabled':''}>✕</button>`;
     card.querySelector('select').addEventListener('change',e=>{stops[i].city=e.target.value;reset();});
     card.querySelectorAll('.mode').forEach(btn=>btn.addEventListener('click',()=>{stops[i].mode=btn.dataset.mode;renderControls();reset();}));
+    const legDurationInput=card.querySelector('.leg-duration');
+    if(legDurationInput) legDurationInput.addEventListener('change',e=>{
+      stops[i].duration=Math.max(0.5,Math.min(300,Number(e.target.value)||5));
+      renderControls(); reset();
+    });
     card.querySelector('.icon-btn').addEventListener('click',()=>{if(stops.length>2){stops.splice(i,1);renderControls();reset();}});
     stopsEl.appendChild(card);
   });
@@ -272,7 +287,7 @@ function vehicleMarkup(mode){
 
 function renderMap(){
   const resolved=getResolved(), segments=getSegments();
-  subtitleEl.textContent=`${resolved.length} STOPS • ${getDurationSeconds()} SECONDS`;
+  subtitleEl.textContent=`${resolved.length} STOPS • ${getDurationSeconds()}s TOTAL`;
   if(journeyTitleEl) journeyTitleEl.textContent=resolved.map(s=>s.data.name).join(' → ');
   routesEl.innerHTML=''; markersEl.innerHTML='';
 
@@ -399,11 +414,8 @@ document.getElementById('addStop').addEventListener('click',()=>{stops.push({cit
 document.getElementById('playBtn').addEventListener('click',animate);
 document.getElementById('resetBtn').addEventListener('click',reset);
 document.getElementById('exportBtn').addEventListener('click',exportWebM);
-durationEl.addEventListener('input',()=>{
-  durationLabelEl.textContent=`${getDurationSeconds()}s`;
-  // If the user changes duration while playing, restart immediately with the new duration.
-  if(playing) animate();
-});
+// Overall duration is calculated automatically from per-leg durations.
+
 
 renderWorld();
 renderControls();
