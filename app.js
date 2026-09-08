@@ -219,26 +219,18 @@ function renderControls(){
   });
 }
 
-function vehicleMarkup(mode){
-  const icons = {
-    plane: `
-      <image
-        href="./plane.png"
-        x="-72"
-        y="-72"
-        width="144"
-        height="144"
-        preserveAspectRatio="xMidYMid meet"
-      />
-    `,
-    car: '<rect x="-32" y="-11" width="64" height="27" rx="9" fill="#f4f8fa" stroke="#18394c" stroke-width="3"/><path d="M-20 -11 L-9 -27 H14 L27 -11 Z" fill="#e94242" stroke="#18394c" stroke-width="3"/><circle cx="-20" cy="19" r="8" fill="#18394c"/><circle cx="21" cy="19" r="8" fill="#18394c"/>',
-    train: '<rect x="-29" y="-29" width="58" height="54" rx="11" fill="#f4f8fa" stroke="#18394c" stroke-width="3"/><rect x="-20" y="-18" width="15" height="14" rx="2" fill="#79c6ed"/><rect x="5" y="-18" width="15" height="14" rx="2" fill="#79c6ed"/><path d="M-24 11 H24" stroke="#e94242" stroke-width="5"/><circle cx="-17" cy="30" r="7" fill="#18394c"/><circle cx="17" cy="30" r="7" fill="#18394c"/>',
-    ship: '<path d="M-37 8 H37 L25 30 H-25 Z" fill="#f4f8fa" stroke="#18394c" stroke-width="3"/><rect x="-11" y="-24" width="28" height="32" rx="3" fill="#e94242" stroke="#18394c" stroke-width="3"/><rect x="-4" y="-16" width="13" height="9" fill="#cfeaf7"/>'
-  };
+const VEHICLE_ASSETS = {
+  plane: {src:'./plane.png', width:144, height:144, rotationOffset:90},
+  car: {src:'./mobil.png', width:132, height:132, rotationOffset:90},
+  train: {src:'./kereta.png', width:132, height:132, rotationOffset:90},
+  ship: {src:'./kapal.png', width:140, height:140, rotationOffset:90}
+};
 
-  // Plane uses a transparent PNG asset; other modes keep their vector icons.
-  if(mode === 'plane') return icons.plane;
-  return `<circle r="49" fill="#ffffff" fill-opacity=".96" stroke="#18394c" stroke-width="3"/>${icons[mode] || icons.plane}`;
+function vehicleMarkup(mode){
+  const asset = VEHICLE_ASSETS[mode] || VEHICLE_ASSETS.plane;
+  const x = -asset.width / 2;
+  const y = -asset.height / 2;
+  return `<image href="${asset.src}" x="${x}" y="${y}" width="${asset.width}" height="${asset.height}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
 function renderMap(){
@@ -290,7 +282,8 @@ function renderMap(){
   }
   // Do NOT wrap the vehicle back into the base tile. The camera and repeated
   // map tiles follow its continuous x coordinate naturally.
-  sprite.setAttribute('transform',`translate(${pt.x} ${pt.y}) rotate(${angle})`);
+  const rotationOffset=(VEHICLE_ASSETS[seg.mode] || VEHICLE_ASSETS.plane).rotationOffset || 0;
+  sprite.setAttribute('transform',`translate(${pt.x} ${pt.y}) rotate(${angle + rotationOffset})`);
 }
 
 function animate(){
