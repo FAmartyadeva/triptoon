@@ -176,7 +176,7 @@ function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 
 function cameraState(segments){
   if(!segments.length){
-    return {x:MAP.width/2,y:MAP.height/2,scale:3.15};
+    return {x:MAP.width/2,y:MAP.height/2,scale:9.45};
   }
   const active=activeSegmentAt(segments,progress);
   const {seg,t}=active;
@@ -185,7 +185,7 @@ function cameraState(segments){
   // Camera zoom is based on leg length: local trips are closer, long-haul
   // flights pull back slightly, but the map always occupies most of 9:16.
   const d=Math.max(1,seg.distanceKm);
-  const scale=clamp(6.25-Math.log10(d)*0.95,3.0,4.9);
+  const scale=clamp((6.25-Math.log10(d)*0.95)*3,9.0,14.7);
 
   // Follow the vehicle but look a little ahead along the current leg so the
   // destination remains visible and movement feels intentional.
@@ -220,10 +220,10 @@ function renderControls(){
 }
 
 const VEHICLE_ASSETS = {
-  plane: {src:'./plane.png', width:144, height:144, rotationOffset:90},
-  car: {src:'./mobil.png', width:132, height:132, rotationOffset:90},
-  train: {src:'./kereta.png', width:132, height:132, rotationOffset:90},
-  ship: {src:'./kapal.png', width:140, height:140, rotationOffset:90}
+  plane: {src:'./plane.png', width:36, height:36, rotationOffset:90},
+  car: {src:'./mobil.png', width:33, height:33, rotationOffset:90},
+  train: {src:'./kereta.png', width:33, height:33, rotationOffset:90},
+  ship: {src:'./kapal.png', width:35, height:35, rotationOffset:90}
 };
 
 function vehicleMarkup(mode){
@@ -246,7 +246,7 @@ function renderMap(){
 
   segments.forEach(seg=>{
     const amount=segmentProgress(seg,progress);
-    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity=".82"/><path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="5" stroke-linecap="round" stroke-dasharray="12 10" opacity=".38"/><path d="${seg.d}" fill="none" stroke="#17384a" stroke-width="6" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
+    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity=".82"/><path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="12 10" opacity=".38"/><path d="${seg.d}" fill="none" stroke="#17384a" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
   });
 
   // Repeat labels/markers horizontally too, so labels remain attached to land
@@ -254,7 +254,7 @@ function renderMap(){
   for(const s of resolved){
     const p=project(s.data.lon,s.data.lat);
     for(const offset of [-MAP.width,0,MAP.width]){
-      markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x+offset} ${p.y})"><circle r="9" fill="#17384a"/><circle r="3.5" fill="#ffffff"/><rect x="-55" y="14" width="110" height="31" rx="15.5" fill="#ffffff" fill-opacity=".94" stroke="#bdd2d8" stroke-width="1"/><text x="0" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#17384a">${esc(s.data.name)}</text></g>`);
+      markersEl.insertAdjacentHTML('beforeend',`<g transform="translate(${p.x+offset} ${p.y})"><circle r="2.4" fill="#17384a"/><circle r="0.9" fill="#ffffff"/><rect x="-15" y="4" width="30" height="9" rx="4.5" fill="#ffffff" fill-opacity=".94" stroke="#bdd2d8" stroke-width="0.35"/><text x="0" y="10.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="4.4" font-weight="700" fill="#17384a">${esc(s.data.name)}</text></g>`);
     }
   }
 
