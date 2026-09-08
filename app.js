@@ -328,6 +328,113 @@ function shortestMaritimePath(startId,endId){
   return ids;
 }
 
+
+function pointInRing(lon,lat,ring){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0], yi=ring[i][1];
+    const xj=ring[j][0], yj=ring[j][1];
+    const hit=((yi>lat)!==(yj>lat)) &&
+      (lon < (xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi);
+    if(hit) inside=!inside;
+  }
+  return inside;
+}
+
+function normalizeLon(lon){
+  while(lon>180) lon-=360;
+  while(lon<-180) lon+=360;
+  return lon;
+}
+
+function isLandPoint(p){
+  const lon=normalizeLon(p.lon), lat=p.lat;
+  for(const country of WORLD_COUNTRIES){
+    for(const ring of country.p){
+      if(pointInRing(lon,lat,ring)) return true;
+    }
+  }
+  return false;
+}
+
+function interpolateGeo(a,b,t){
+  let dLon=b.lon-a.lon;
+  if(dLon>180) dLon-=360;
+  if(dLon<-180) dLon+=360;
+  return {
+    lon:normalizeLon(a.lon+dLon*t),
+    lat:a.lat+(b.lat-a.lat)*t
+  };
+}
+
+function segmentTouchesLand(a,b){
+  const km=geoDistanceKm(a,b);
+  // Dense enough to catch coast crossings while remaining light in-browser.
+  const steps=Math.max(12,Math.ceil(km/18));
+  for(let i=1;i<steps;i++){
+    const p=interpolateGeo(a,b,i/steps);
+    if(isLandPoint(p)) return true;
+  }
+  return false;
+}
+
+function waterDetourCandidates(a,b){
+  const mid=interpolateGeo(a,b,0.5);
+  let dLon=b.lon-a.lon;
+  if(dLon>180)dLon-=360;
+  if(dLon<-180)dLon+=360;
+  const dLat=b.lat-a.lat;
+  const len=Math.hypot(dLon,dLat)||1;
+
+  // Perpendicular offsets let the route bend around a coastline/island.
+  const nx=-dLat/len, ny=dLon/len;
+  const offsets=[0.35,-0.35,0.7,-0.7,1.2,-1.2,2,-2,3.5,-3.5,5,-5,8,-8];
+
+  return offsets.map(off=>({
+    lon:normalizeLon(mid.lon+nx*off),
+    lat:Math.max(-80,Math.min(80,mid.lat+ny*off))
+  })).filter(p=>!isLandPoint(p));
+}
+
+function makeSeaSafeSegment(a,b,depth=0){
+  if(!segmentTouchesLand(a,b)) return [a,b];
+  if(depth>=7) return [a,b];
+
+  const candidates=waterDetourCandidates(a,b);
+  let best=null,bestCost=Infinity;
+
+  for(const c of candidates){
+    const hit1=segmentTouchesLand(a,c);
+    const hit2=segmentTouchesLand(c,b);
+    const penalty=(hit1?100000:0)+(hit2?100000:0);
+    const cost=geoDistanceKm(a,c)+geoDistanceKm(c,b)+penalty;
+    if(cost<bestCost){bestCost=cost;best=c;}
+    if(!hit1 && !hit2) return [a,c,b];
+  }
+
+  if(!best) return [a,b];
+
+  const left=makeSeaSafeSegment(a,best,depth+1);
+  const right=makeSeaSafeSegment(best,b,depth+1);
+  return [...left.slice(0,-1),...right];
+}
+
+function makeSeaSafeRoute(points){
+  if(points.length<2) return points;
+  const safe=[points[0]];
+  for(let i=0;i<points.length-1;i++){
+    const seg=makeSeaSafeSegment(points[i],points[i+1]);
+    safe.push(...seg.slice(1));
+  }
+
+  // Remove duplicate/near-duplicate points.
+  const out=[];
+  for(const p of safe){
+    if(!out.length || geoDistanceKm(out[out.length-1],p)>3) out.push(p);
+  }
+  return out;
+}
+
 function shipRoutePoints(a,b){
   // IMPORTANT: animate from offshore approaches, not city centres on land.
   const seaA=seaEndpoint(a);
@@ -344,7 +451,7 @@ function shipRoutePoints(a,b){
   for(const p of pts){
     if(!out.length || geoDistanceKm(out[out.length-1],p)>35) out.push(p);
   }
-  return out;
+  return makeSeaSafeRoute(out);
 }
 
 function routeForMode(a,b,mode){
@@ -693,6 +800,63 @@ function vehicleMarkup(mode){
   return `<image href="${asset.src}" x="${x}" y="${y}" width="${asset.width}" height="${asset.height}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
+
+function smoothMotionT(t){
+  return t*t*(3-2*t);
+}
+
+function quadraticPartialPath(seg,t){
+  t=Math.max(0,Math.min(1,t));
+  if(t<=0) return '';
+  const steps=Math.max(2,Math.ceil(60*t));
+  const pts=[];
+  for(let i=0;i<=steps;i++){
+    const u=t*(i/steps);
+    pts.push(qPoint(seg.p1,seg.c,seg.p2,u));
+  }
+  return pts.map((p,i)=>(i?'L':'M')+` ${p.x} ${p.y}`).join(' ');
+}
+
+function polylinePartialPath(points,t){
+  t=Math.max(0,Math.min(1,t));
+  if(!points || points.length<2 || t<=0) return '';
+
+  const lengths=[];
+  let total=0;
+  for(let i=0;i<points.length-1;i++){
+    const len=Math.hypot(points[i+1].x-points[i].x,points[i+1].y-points[i].y);
+    lengths.push(len);
+    total+=len;
+  }
+
+  let remaining=total*t;
+  const out=[points[0]];
+
+  for(let i=0;i<lengths.length;i++){
+    const a=points[i], b=points[i+1], len=lengths[i];
+    if(remaining>=len){
+      out.push(b);
+      remaining-=len;
+    }else{
+      const f=len?remaining/len:0;
+      out.push({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+      break;
+    }
+  }
+
+  return out.map((p,i)=>(i?'L':'M')+` ${p.x} ${p.y}`).join(' ');
+}
+
+function completedPathForSegment(seg,overallProgress){
+  const raw=segmentProgress(seg,overallProgress);
+  const t=smoothMotionT(raw);
+  if(t<=0) return '';
+  if(t>=0.999999) return seg.d;
+  return seg.kind==='polyline'
+    ? polylinePartialPath(seg.points,t)
+    : quadraticPartialPath(seg,t);
+}
+
 function renderMap(){
   const resolved=getResolved(), segments=getSegments();
   subtitleEl.textContent=`${resolved.length} STOPS • ${getDurationSeconds()}s TOTAL`;
@@ -705,14 +869,26 @@ function renderMap(){
   applyCamera(segments);
 
   segments.forEach(seg=>{
-    const amount=segmentProgress(seg,progress);
     const vs=visualScaleForMode(seg.mode);
     const outerW=(2.5*vs).toFixed(3);
     const midW=(1.25*vs).toFixed(3);
     const innerW=(1.5*vs).toFixed(3);
     const dashA=(12*vs).toFixed(3);
     const dashB=(10*vs).toFixed(3);
-    routesEl.insertAdjacentHTML('beforeend',`<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="${outerW}" stroke-linecap="round" opacity=".82"/><path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="${midW}" stroke-linecap="round" stroke-dasharray="${dashA} ${dashB}" opacity=".38"/><path d="${seg.d}" fill="none" stroke="#17384a" stroke-width="${innerW}" stroke-linecap="round" pathLength="1" stroke-dasharray="${amount} 1"/>`);
+    const completedD=completedPathForSegment(seg,progress);
+
+    // Base route.
+    routesEl.insertAdjacentHTML('beforeend',
+      `<path d="${seg.d}" fill="none" stroke="#ffffff" stroke-width="${outerW}" stroke-linecap="round" stroke-linejoin="round" opacity=".82"/>`+
+      `<path d="${seg.d}" fill="none" stroke="#1e4256" stroke-width="${midW}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashA} ${dashB}" opacity=".38"/>`
+    );
+
+    // Completed route uses exactly the same eased progress as the vehicle.
+    if(completedD){
+      routesEl.insertAdjacentHTML('beforeend',
+        `<path d="${completedD}" fill="none" stroke="#17384a" stroke-width="${innerW}" stroke-linecap="round" stroke-linejoin="round"/>`
+      );
+    }
   });
 
   // Repeat labels/markers horizontally too, so labels remain attached to land
@@ -739,7 +915,7 @@ function renderMap(){
   if(!segments.length){ vehicleEl.innerHTML=''; return; }
   const active=activeSegmentAt(segments,progress);
   const seg=active.seg, t=active.t;
-  const motionT=t*t*(3-2*t);
+  const motionT=smoothMotionT(t);
   if(legTitle) legTitle.textContent=`${seg.from.name} → ${seg.to.name}`;
   if(legDistance) legDistance.textContent=`~ ${Math.round(seg.distanceKm).toLocaleString()} km`;
   if(legMode) legMode.textContent=({plane:'✈',car:'🚗',train:'🚆',ship:'🚢'})[seg.mode] || '✈';

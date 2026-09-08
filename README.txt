@@ -1,16 +1,18 @@
-TripToon - Maritime Routing V2 + Seamless Country Borders
+TripToon - Maritime V3 / Sea Collision Avoidance + Perfect Route Sync
 
-Fixes:
-1. Cape Town -> Los Angeles can now route logically through:
-   South Atlantic -> Caribbean -> Panama Canal -> Eastern Pacific -> California.
-2. Ship routes start/end from offshore approach points, not city-centre coordinates on land.
-3. Maritime graph was expanded substantially across Atlantic, Indian and Pacific oceans.
-4. Ship routes use multiple sea waypoints and may bend many times instead of drawing a straight line.
-5. Country rendering now uses a land underlay + separate fills + separate border strokes.
-   This removes the visible blue gaps between neighbouring countries caused by SVG anti-aliasing.
+Fix 1 — Ship stays on water:
+- Every ship segment is now checked against the actual bundled country polygons.
+- If a segment crosses land, the engine inserts additional water waypoints.
+- The route may bend several times around coastlines/islands.
+- Existing offshore port approach points and global maritime chokepoint graph remain.
 
-Runtime API cost remains zero.
+Fix 2 — Vehicle and route animation synchronized:
+- The moving vehicle and the completed route line now use the exact same eased progress.
+- The completed line is constructed geometrically up to the vehicle's current position.
+- This removes the previous mismatch at short/long user-entered durations.
+
+No paid API and no runtime routing request.
 
 Replace:
 - app.js
-- world-data.js (included for consistency)
+- world-data.js
