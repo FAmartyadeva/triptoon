@@ -1,11 +1,15 @@
-TripToon update - Smaller Car + More Accurate World Map
+TripToon - Logical Maritime Routing
 
-Changes:
-1. Car sprite reduced from 33x33 to 27x27 SVG units so its apparent size is closer to the train.
-2. Map projection changed from simple equirectangular projection to Web Mercator.
-3. Country geometry, city markers, routes and vehicles all use the same projection.
-4. Country borders use thinner rounded joins for a cleaner cartographic look.
-5. world-data.js is bundled locally; no runtime map API is required.
-6. Per-leg duration, alphabetical Country/City selector, custom PNG vehicles, mode-aware zoom and smooth transitions are preserved.
+Major change:
+- Ship routes no longer use airplane-like direct curves.
+- Ship mode now uses a local maritime waypoint graph.
+- The graph includes major global sea corridors/chokepoints such as:
+  Malacca Strait, Indian Ocean, Gulf of Aden, Bab-el-Mandeb,
+  Red Sea, Suez Canal, Mediterranean, Gibraltar, Cape of Good Hope,
+  Panama and North Pacific/Bering alternatives.
+- Dijkstra shortest-path routing selects a logical maritime corridor.
+- Plane keeps the aerial curve.
+- Car/train architecture remains separate and can next be upgraded to dedicated road/rail graphs.
 
-Replace app.js AND world-data.js with the files in this ZIP.
+No paid API or runtime map request is introduced.
+Replace app.js from this ZIP.

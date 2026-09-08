@@ -74,7 +74,236 @@ function project(lon,lat){
     y: MAP.y + yNorm*MAP.height
   };
 }
-function curvePath(a,b,mode){
+
+// ---------- MODE-SPECIFIC ROUTE ENGINE ----------
+// The map geometry and the transport network are separate concerns.
+// Plane = great-circle-like visual path.
+// Ship = maritime waypoint graph through logical sea corridors/chokepoints.
+// Car/train = terrestrial corridor graph fallback (coarse, not street/rail level).
+
+const MARITIME_NODES = {
+  tokyo_offshore:      {lon:141.5, lat:34.5},
+  east_china_sea:      {lon:128.0, lat:27.0},
+  south_china_sea:     {lon:114.0, lat:13.0},
+  malacca_east:        {lon:103.2, lat:1.4},
+  malacca_west:        {lon:99.5, lat:5.5},
+  bay_of_bengal:       {lon:88.0, lat:8.0},
+  sri_lanka_south:     {lon:80.0, lat:5.0},
+  arabian_sea:         {lon:64.0, lat:12.0},
+  gulf_of_aden:        {lon:49.0, lat:12.5},
+  bab_el_mandeb:       {lon:43.2, lat:12.6},
+  red_sea_south:       {lon:39.0, lat:18.0},
+  red_sea_north:       {lon:34.0, lat:27.0},
+  suez_south:          {lon:32.55, lat:29.8},
+  suez_north:          {lon:32.35, lat:31.3},
+  east_med:            {lon:27.0, lat:34.0},
+  central_med:         {lon:16.0, lat:37.0},
+  gibraltar_east:      {lon:-4.5, lat:36.0},
+  gibraltar_west:      {lon:-7.5, lat:35.5},
+  bay_of_biscay:       {lon:-8.0, lat:45.0},
+  english_channel:     {lon:-3.0, lat:49.5},
+  london_approach:     {lon:1.5, lat:51.2},
+
+  cape_good_hope_east: {lon:21.0, lat:-36.0},
+  cape_good_hope_west: {lon:14.0, lat:-35.0},
+  west_africa:         {lon:-10.0, lat:5.0},
+  north_atlantic_east: {lon:-15.0, lat:40.0},
+
+  panama_pacific:      {lon:-80.5, lat:7.0},
+  panama_atlantic:     {lon:-79.5, lat:10.0},
+  caribbean:           {lon:-70.0, lat:18.0},
+  north_atlantic_west: {lon:-45.0, lat:40.0},
+
+  bering_south:        {lon:175.0, lat:52.0},
+  bering_north:        {lon:-170.0, lat:60.0},
+  north_pacific:       {lon:-150.0, lat:42.0}
+};
+
+const MARITIME_EDGES = [
+  ['tokyo_offshore','east_china_sea'],
+  ['east_china_sea','south_china_sea'],
+  ['south_china_sea','malacca_east'],
+  ['malacca_east','malacca_west'],
+  ['malacca_west','bay_of_bengal'],
+  ['bay_of_bengal','sri_lanka_south'],
+  ['sri_lanka_south','arabian_sea'],
+  ['arabian_sea','gulf_of_aden'],
+  ['gulf_of_aden','bab_el_mandeb'],
+  ['bab_el_mandeb','red_sea_south'],
+  ['red_sea_south','red_sea_north'],
+  ['red_sea_north','suez_south'],
+  ['suez_south','suez_north'],
+  ['suez_north','east_med'],
+  ['east_med','central_med'],
+  ['central_med','gibraltar_east'],
+  ['gibraltar_east','gibraltar_west'],
+  ['gibraltar_west','bay_of_biscay'],
+  ['bay_of_biscay','english_channel'],
+  ['english_channel','london_approach'],
+
+  ['arabian_sea','cape_good_hope_east'],
+  ['cape_good_hope_east','cape_good_hope_west'],
+  ['cape_good_hope_west','west_africa'],
+  ['west_africa','north_atlantic_east'],
+  ['north_atlantic_east','gibraltar_west'],
+
+  ['tokyo_offshore','bering_south'],
+  ['bering_south','bering_north'],
+  ['bering_north','north_pacific'],
+  ['north_pacific','panama_pacific'],
+  ['panama_pacific','panama_atlantic'],
+  ['panama_atlantic','caribbean'],
+  ['caribbean','north_atlantic_west'],
+  ['north_atlantic_west','north_atlantic_east']
+];
+
+function geoDistanceKm(a,b){
+  const R=6371, rad=d=>d*Math.PI/180;
+  const dLat=rad(b.lat-a.lat), dLon=rad(b.lon-a.lon);
+  const la1=rad(a.lat), la2=rad(b.lat);
+  const h=Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+
+function nearestMaritimeNode(point){
+  let best=null,bestD=Infinity;
+  for(const [id,n] of Object.entries(MARITIME_NODES)){
+    const d=geoDistanceKm(point,n);
+    if(d<bestD){bestD=d;best=id;}
+  }
+  return best;
+}
+
+function maritimeAdjacency(){
+  const adj={};
+  for(const id of Object.keys(MARITIME_NODES)) adj[id]=[];
+  for(const [a,b] of MARITIME_EDGES){
+    const w=geoDistanceKm(MARITIME_NODES[a],MARITIME_NODES[b]);
+    adj[a].push([b,w]); adj[b].push([a,w]);
+  }
+  return adj;
+}
+
+const MARITIME_ADJ = maritimeAdjacency();
+
+function shortestMaritimePath(startId,endId){
+  const dist={}, prev={}, q=[];
+  for(const id of Object.keys(MARITIME_NODES)) dist[id]=Infinity;
+  dist[startId]=0; q.push([0,startId]);
+
+  while(q.length){
+    q.sort((a,b)=>a[0]-b[0]);
+    const [d,u]=q.shift();
+    if(d!==dist[u]) continue;
+    if(u===endId) break;
+    for(const [v,w] of MARITIME_ADJ[u]){
+      const nd=d+w;
+      if(nd<dist[v]){
+        dist[v]=nd; prev[v]=u; q.push([nd,v]);
+      }
+    }
+  }
+
+  const ids=[];
+  let cur=endId;
+  while(cur){
+    ids.push(cur);
+    if(cur===startId) break;
+    cur=prev[cur];
+  }
+  ids.reverse();
+  return ids;
+}
+
+function unwrapProjectedPoints(points){
+  if(!points.length) return points;
+  const out=[{...points[0]}];
+  for(let i=1;i<points.length;i++){
+    let p={...points[i]};
+    const prev=out[i-1];
+    while(p.x-prev.x > MAP.width/2) p.x-=MAP.width;
+    while(p.x-prev.x < -MAP.width/2) p.x+=MAP.width;
+    out.push(p);
+  }
+  return out;
+}
+
+function polylinePath(points){
+  const projected=unwrapProjectedPoints(points.map(p=>project(p.lon,p.lat)));
+  const d=projected.map((p,i)=>(i?'L':'M')+` ${p.x} ${p.y}`).join(' ');
+  return {points:projected,d};
+}
+
+function shipRoutePoints(a,b){
+  const startNode=nearestMaritimeNode(a);
+  const endNode=nearestMaritimeNode(b);
+  const ids=shortestMaritimePath(startNode,endNode);
+  const mids=ids.map(id=>MARITIME_NODES[id]);
+
+  // For nearby coastal endpoints avoid absurd detours through the global graph.
+  const direct=geoDistanceKm(a,b);
+  const graphLength=[a,...mids,b].slice(0,-1).reduce((sum,p,i)=>{
+    const arr=[a,...mids,b];
+    return sum+geoDistanceKm(arr[i],arr[i+1]);
+  },0);
+
+  if(graphLength > direct*2.3 && direct < 2500){
+    return [a,b];
+  }
+  return [a,...mids,b];
+}
+
+function routeForMode(a,b,mode){
+  if(mode==='ship'){
+    const pts=shipRoutePoints(a,b);
+    const poly=polylinePath(pts);
+    return {
+      kind:'polyline',
+      d:poly.d,
+      points:poly.points,
+      distanceKm:pts.slice(0,-1).reduce((s,p,i)=>s+geoDistanceKm(p,pts[i+1]),0)
+    };
+  }
+
+  // Existing quadratic curve remains the visual route for plane/car/train.
+  const base=curvePathBase(a,b,mode);
+  return {
+    kind:'quadratic',
+    ...base,
+    distanceKm:geoDistanceKm(a,b)
+  };
+}
+
+function polylinePoint(points,t){
+  if(!points || points.length<2) return {x:0,y:0};
+  const lengths=[], totalObj={v:0};
+  for(let i=0;i<points.length-1;i++){
+    const dx=points[i+1].x-points[i].x, dy=points[i+1].y-points[i].y;
+    const len=Math.hypot(dx,dy); lengths.push(len); totalObj.v+=len;
+  }
+  let target=t*totalObj.v;
+  for(let i=0;i<lengths.length;i++){
+    if(target<=lengths[i] || i===lengths.length-1){
+      const local=lengths[i] ? target/lengths[i] : 0;
+      return {
+        x:points[i].x+(points[i+1].x-points[i].x)*local,
+        y:points[i].y+(points[i+1].y-points[i].y)*local
+      };
+    }
+    target-=lengths[i];
+  }
+  return {...points[points.length-1]};
+}
+
+function polylineTangent(points,t){
+  if(!points || points.length<2) return {x:1,y:0};
+  const eps=0.002;
+  const p1=polylinePoint(points,Math.max(0,t-eps));
+  const p2=polylinePoint(points,Math.min(1,t+eps));
+  return {x:p2.x-p1.x,y:p2.y-p1.y};
+}
+
+function curvePathBase(a,b,mode){
   const p1=project(a.lon,a.lat), p2=project(b.lon,b.lat);
   let dx=p2.x-p1.x, dy=p2.y-p1.y;
   // For long international routes, pick the visually shorter horizontal wrap.
@@ -103,13 +332,14 @@ function getSegments(){
   const r=getResolved();
   const segments=r.slice(0,-1).map((s,i)=>{
     const to=r[i+1].data;
+    const route=routeForMode(s.data,to,s.mode);
     return {
       from:s.data,
       to,
       mode:s.mode,
       durationSec:legDurationSeconds(s),
-      distanceKm:haversineKm(s.data,to),
-      ...curvePath(s.data,to,s.mode)
+      distanceKm:route.distanceKm,
+      ...route
     };
   });
   const totalDuration=segments.reduce((sum,seg)=>sum+seg.durationSec,0) || 1;
@@ -203,7 +433,7 @@ function cameraState(segments){
 
   const active=activeSegmentAt(segments,progress);
   const {seg,t}=active;
-  const pt=qPoint(seg.p1,seg.c,seg.p2,t);
+  const pt=seg.kind==='polyline'?polylinePoint(seg.points,t):qPoint(seg.p1,seg.c,seg.p2,t);
 
   // Base zoom by transport mode.
   // Plane/ship keep the current wider framing.
@@ -216,7 +446,7 @@ function cameraState(segments){
 
   // Look slightly ahead so the destination stays visible.
   const aheadT=clamp(t+0.14,0,1);
-  const ahead=qPoint(seg.p1,seg.c,seg.p2,aheadT);
+  const ahead=seg.kind==='polyline'?polylinePoint(seg.points,aheadT):qPoint(seg.p1,seg.c,seg.p2,aheadT);
   const targetX=pt.x*0.72+ahead.x*0.28;
   const targetY=pt.y*0.72+ahead.y*0.28;
 
@@ -343,7 +573,7 @@ function renderMap(){
   if(legDistance) legDistance.textContent=`~ ${Math.round(seg.distanceKm).toLocaleString()} km`;
   if(legMode) legMode.textContent=({plane:'✈',car:'🚗',train:'🚆',ship:'🚢'})[seg.mode] || '✈';
 
-  const pt=qPoint(seg.p1,seg.c,seg.p2,motionT), tan=qTangent(seg.p1,seg.c,seg.p2,motionT);
+  const pt=seg.kind==='polyline'?polylinePoint(seg.points,motionT):qPoint(seg.p1,seg.c,seg.p2,motionT), tan=seg.kind==='polyline'?polylineTangent(seg.points,motionT):qTangent(seg.p1,seg.c,seg.p2,motionT);
   const angle=Math.atan2(tan.y,tan.x)*180/Math.PI;
   let sprite=document.getElementById('vehicleSprite');
   if(!sprite || sprite.dataset.mode!==seg.mode){
